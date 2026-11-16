@@ -1,0 +1,101 @@
+name: Prepare CurseForge tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version from the add-on TOC, without the v prefix
+        required: true
+        type: string
+      create_tag:
+        description: Push the release tag to the connected CurseForge packager
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: curseforge-release-tag
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+      - name: Verify and tag the Forever release
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          CREATE_TAG: ${{ inputs.create_tag }}
+        run: |
+          if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+            echo "Run this workflow from main." >&2
+            exit 1
+          fi
+          addon="${GITHUB_REPOSITORY##*/}"
+          manifest="$addon.toc"
+          tag="v$RELEASE_VERSION"
+
+          python3 - "$manifest" "$RELEASE_VERSION" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          manifest = Path(sys.argv[1])
+          version = sys.argv[2]
+          if not re.fullmatch(r"[0-9]+(?:\.[0-9]+){2}(?:-(?:alpha|beta)[0-9]*)?", version):
+              sys.exit("Enter a version such as 1.2.3 or 1.2.3-beta1.")
+          source = manifest.read_bytes()
+          toc = source.decode("utf-8-sig")
+          if re.findall(r"^## Version:[ \t]*([^\r\n]+)", toc, re.M) != [version]:
+              sys.exit("The requested version differs from the TOC.")
+          interfaces = re.findall(r"^## Interface:[ \t]*([^\r\n]+)", toc, re.M)
+          if len(interfaces) != 1 or "16001" not in interfaces[0].replace(" ", "").split(","):
+              sys.exit("The TOC must declare Forever interface 16001.")
+          if f"## {version}" not in Path("CHANGELOG.md").read_text(encoding="utf-8-sig").splitlines():
+              sys.exit("The changelog has no section for this version.")
+          if f"package-as: {manifest.stem}" not in Path(".pkgmeta").read_text(encoding="utf-8-sig").splitlines():
+              sys.exit("The .pkgmeta folder name differs from the TOC name.")
+          for line in toc.splitlines():
+              row = line.strip()
+              if row and not row.startswith("#"):
+                  path = Path(row.split(" [", 1)[0].replace("\\", "/"))
+                  if not path.is_file() or not path.resolve().is_relative_to(Path.cwd()):
+                      sys.exit(f"Missing or invalid TOC file: {path}")
+          if interfaces[0].strip() != "16001":
+              manifest.write_bytes(re.sub(
+                  rb"(?m)^(\xef\xbb\xbf)?## Interface:[^\r\n]*",
+                  lambda match: (match[1] or b"") + b"## Interface: 16001",
+                  source,
+                  count=1,
+              ))
+          PY
+
+          remote_main="$(git ls-remote --exit-code origin refs/heads/main | cut -f1)"
+          if [[ "$remote_main" != "$GITHUB_SHA" ]]; then
+            echo "main moved since the workflow started. Run it again on the latest commit." >&2
+            exit 1
+          fi
+          if [[ -n "$(git ls-remote --tags origin "refs/tags/$tag")" ]]; then
+            echo "Tag $tag already exists." >&2
+            exit 1
+          fi
+          git diff --check
+          if [[ "$CREATE_TAG" != true ]]; then
+            git diff -- "$manifest"
+            echo "Verified $tag on $GITHUB_SHA. No tag was created."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- "$manifest"; then
+            git add -- "$manifest"
+            git commit -m "Prepare $addon $RELEASE_VERSION for WoW Forever"
+          fi
+          git tag -a "$tag" -m "$addon $RELEASE_VERSION (Forever)"
+          git push origin "refs/tags/$tag"
