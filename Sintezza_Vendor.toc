@@ -1,0 +1,26 @@
+## Interface: 16001
+## Title: Sintezza Vendor
+## Author: Sintezza
+## X-License: MIT
+## Notes: Merchant catalogue, bag sales, loot review and transaction history.
+## Notes-ruRU: Каталог торговца, продажа из сумок, разбор добычи и журнал.
+## Version: 2.1.18
+## Category: Bags & Inventory
+## Category-ruRU: Сумки и инвентарь
+## IconTexture: Interface\AddOns\Sintezza_Vendor\Media\Icon
+## SavedVariables: Sintezza_VendorDB
+## Dependencies: Sintezza_Theme
+## OptionalDeps: Auctionator, Sintezza_Disenchant, Mastercraft
+
+Locales.lua
+Launcher.lua
+Theme.lua
+Inventory.lua
+Mastercraft.lua
+LootReview.lua
+Sale.lua
+Journal.lua
+Catalog.lua
+MerchantWindow.lua
+Settings.lua
+Core.lua
