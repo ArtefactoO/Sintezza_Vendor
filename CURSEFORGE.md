@@ -20,9 +20,13 @@ Browse a merchant's stock in a searchable grid or list, buy back sold stacks, re
 
 **Loot Review** compares vendor proceeds with estimated net auction proceeds and disenchant value. **Mark vendor picks** brings eligible stacks to the top and skips protected items and items Mastercraft recommends keeping, auctioning, or disenchanting. If Mastercraft shows loot advice only with Shift, hold Shift while marking. Review the selection and confirm before selling.
 
+### Appearance
+
+**Requires [Sintezza Theme](https://github.com/ArtefactoO/Sintezza_Theme).** Open `/stheme` to choose the palette and fonts for this addon's windows.
+
 ### Requirements
 
-Install and enable [Sintezza Theme](https://github.com/ArtefactoO/Sintezza_Theme). Open `/stheme` to change the palette and fonts used by this addon's windows. Install [Mastercraft](https://www.curseforge.com/wow/addons/mastercraft) and enable its loot advice to use its recommendations and prices in **Loot Review**. [Auctionator](https://www.curseforge.com/wow/addons/auctionator) and [Sintezza Disenchant](https://github.com/ArtefactoO/Sintezza_Disenchant) can supply fallback estimates. The merchant, repair, buyback, and journal work with Theme alone.
+Install [Mastercraft](https://www.curseforge.com/wow/addons/mastercraft) and enable its loot advice to use its recommendations and prices in **Loot Review**. [Auctionator](https://www.curseforge.com/wow/addons/auctionator) and [Sintezza Disenchant](https://github.com/ArtefactoO/Sintezza_Disenchant) can supply fallback estimates. The merchant, repair, buyback, and journal work with Theme alone.
 
 <!-- Changelog field -->
 
