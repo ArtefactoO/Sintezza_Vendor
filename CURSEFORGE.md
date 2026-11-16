@@ -22,7 +22,7 @@ Browse a merchant's stock in a searchable grid or list, buy back sold stacks, re
 
 ### Requirements
 
-Install and enable [Sintezza Theme](https://github.com/ArtefactoO/Sintezza_Theme). Install [Mastercraft](https://www.curseforge.com/wow/addons/mastercraft) and enable its loot advice to use its recommendations and prices in **Loot Review**. [Auctionator](https://www.curseforge.com/wow/addons/auctionator) and [Sintezza Disenchant](https://github.com/ArtefactoO/Sintezza_Disenchant) can supply fallback estimates. The merchant, repair, buyback, and journal work with Theme alone.
+Install and enable [Sintezza Theme](https://github.com/ArtefactoO/Sintezza_Theme). Open `/stheme` to change the palette and fonts used by this addon's windows. Install [Mastercraft](https://www.curseforge.com/wow/addons/mastercraft) and enable its loot advice to use its recommendations and prices in **Loot Review**. [Auctionator](https://www.curseforge.com/wow/addons/auctionator) and [Sintezza Disenchant](https://github.com/ArtefactoO/Sintezza_Disenchant) can supply fallback estimates. The merchant, repair, buyback, and journal work with Theme alone.
 
 <!-- Changelog field -->
 
