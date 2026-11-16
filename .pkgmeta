@@ -2,3 +2,7 @@ package-as: Sintezza_Vendor
 manual-changelog:
   filename: CHANGELOG.md
   markup-type: markdown
+required-dependencies:
+  - 1810657-sintezza-theme
+optional-dependencies:
+  - 1711528-mastercraft
