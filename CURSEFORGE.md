@@ -7,6 +7,7 @@
 | Flavor and version | Forever 1.60.1 |
 | Main category | Bags & Inventory |
 | Additional categories | Auction & Economy, Data Export |
+| CurseForge relations | Sintezza Theme (Required Dependency), Mastercraft (Optional Dependency) |
 | Project license | MIT. See the repository for third-party notices. |
 
 ## Summary
@@ -21,6 +22,6 @@ Browse a merchant's stock in a searchable grid or list, buy back sold stacks, re
 
 ### Requirements
 
-Install and enable [Sintezza Theme](https://github.com/ArtefactoO/Sintezza_Theme). Install [Mastercraft](https://www.curseforge.com/wow/addons/mastercraft) and enable its loot advice to use its recommendations and prices in **Loot Review**. Auctionator and Sintezza Disenchant can supply fallback estimates. The merchant, repair, buyback, and journal work with Theme alone.
+Install and enable [Sintezza Theme](https://github.com/ArtefactoO/Sintezza_Theme). Install [Mastercraft](https://www.curseforge.com/wow/addons/mastercraft) and enable its loot advice to use its recommendations and prices in **Loot Review**. [Auctionator](https://www.curseforge.com/wow/addons/auctionator) and [Sintezza Disenchant](https://github.com/ArtefactoO/Sintezza_Disenchant) can supply fallback estimates. The merchant, repair, buyback, and journal work with Theme alone.
 
 Source, installation details, and credits are available on [GitHub](https://github.com/ArtefactoO/Sintezza_Vendor).

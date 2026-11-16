@@ -4,7 +4,7 @@
 
 Search merchant stock and compare the proceeds from selling, auctioning, and disenchanting gear in WoW Forever.
 
-**Requires [Sintezza Theme](https://github.com/ArtefactoO/Sintezza_Theme).** Install [Mastercraft](https://www.curseforge.com/wow/addons/mastercraft) and enable its loot advice to use its recommendations and available prices in **Loot Review**. Auctionator and Sintezza Disenchant can supply fallback estimates. The merchant, bag sales, and transaction journal work with Sintezza Theme alone. Choose English or Russian in the theme settings.
+**Requires [Sintezza Theme](https://github.com/ArtefactoO/Sintezza_Theme).** Install [Mastercraft](https://www.curseforge.com/wow/addons/mastercraft) and enable its loot advice to use its recommendations and available prices in **Loot Review**. [Auctionator](https://www.curseforge.com/wow/addons/auctionator) and [Sintezza Disenchant](https://github.com/ArtefactoO/Sintezza_Disenchant) can supply fallback estimates. The merchant, bag sales, and transaction journal work with Sintezza Theme alone. Choose English or Russian in the theme settings.
 
 ## Shopping and selling
 
