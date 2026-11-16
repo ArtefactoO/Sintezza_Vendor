@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.20
+
+- Updated the project logo and in-game addon icon.
+
+### По-русски
+
+- Обновлены логотип проекта и игровая иконка аддона.
+
 ## 2.1.18
 
 - Mastercraft recommendations in Loot Review follow the selected Sintezza language.
