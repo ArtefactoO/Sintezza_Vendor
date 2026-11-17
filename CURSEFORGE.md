@@ -16,9 +16,43 @@ Search merchants and compare vendor, auction, and disenchant values in WoW Forev
 
 ## Description
 
-Browse a merchant's stock in a searchable grid or list, buy back sold stacks, repair gear, and review transactions by character. Use the merchant window's arrow to return to the standard WoW merchant.
+Sintezza Vendor gives WoW Forever merchants a searchable inventory and helps you compare what a stack is worth before you sell it.
 
-**Loot Review** compares vendor proceeds with estimated net auction proceeds and disenchant value. **Mark vendor picks** brings eligible stacks to the top and skips protected items and items Mastercraft recommends keeping, auctioning, or disenchanting. If Mastercraft shows loot advice only with Shift, hold Shift while marking. Review the selection and confirm before selling.
+### Merchant
+
+![Searchable merchant grid with item prices and the last-sale shortcut](https://raw.githubusercontent.com/ArtefactoO/Sintezza_Vendor/main/Docs/CurseForge/01-merchant-catalogue.png)
+
+Search stock by item name, switch between grid and list views, and repair gear from the merchant window.
+
+### Buyback
+
+![Buyback tab showing items you can recover and their prices](https://raw.githubusercontent.com/ArtefactoO/Sintezza_Vendor/main/Docs/CurseForge/03-buyback.png)
+
+Use **Last sale** to recover the most recently sold item. Open **Buyback** to see the other items you can still recover and their prices.
+
+### Loot Review
+
+![Loot Review with Vendor, Auction, and Disenchant columns](https://raw.githubusercontent.com/ArtefactoO/Sintezza_Vendor/main/Docs/CurseForge/04-loot-review.png)
+
+Compare what the merchant pays with estimated auction proceeds after fees and estimated disenchant value. **Mark vendor picks** moves eligible stacks to the top and skips protected items and items Mastercraft recommends keeping, auctioning, or disenchanting. If Mastercraft shows advice only while you hold Shift, hold it when marking.
+
+![Sale confirmation with selected stacks, individual prices, and the total](https://raw.githubusercontent.com/ArtefactoO/Sintezza_Vendor/main/Docs/CurseForge/05-confirm-sale.png)
+
+Check the selected stacks and the total in **Confirm sale** before you sell.
+
+### Journal
+
+![Journal showing confirmed transactions and session totals](https://raw.githubusercontent.com/ArtefactoO/Sintezza_Vendor/main/Docs/CurseForge/06-journal.png)
+
+Review purchases, sales, and buybacks for the current character. Open **Journal data** to export or import the history as CSV.
+
+### Buying and selling settings
+
+Set an instant purchase limit and choose whether to protect equipment sets, crafting materials, and known bound items.
+
+![Searchable list of character-specific item exclusions](https://raw.githubusercontent.com/ArtefactoO/Sintezza_Vendor/main/Docs/CurseForge/08-exclusions.png)
+
+Use **Exclusions** to keep individual items out of sales for this character.
 
 ### Appearance
 

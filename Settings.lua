@@ -17,8 +17,10 @@ local function Place(row, previous, parent)
 end
 
 local function Toggle(parent, previous, key, label, description)
-    return Place(W:Toggle(parent, label, function() return E.profile[key] end,
-        function(value) SetOption(key, value) end, description), previous, parent)
+    local row = Place(W:Toggle(parent, label, function() return E.profile[key] end,
+        function(value) SetOption(key, value) end), previous, parent)
+    if description and W.Help then W:Help(row, description) end
+    return row
 end
 
 local function BuildPurchaseLimit(parent, previous)
@@ -63,9 +65,11 @@ end
 
 local function BuildSale(parent, select)
     local row = Toggle(parent, nil, "showPanelOnVendor",
-        Text("Open Sintezza Vendor at merchants", "Открывать Sintezza Vendor у торговца"))
+        Text("Open Sintezza Vendor at merchants", "Открывать Sintezza Vendor у торговца"),
+        Text("Automatically opens the Vendor window when you visit a merchant.", "Автоматически открывает окно Vendor при посещении торговца."))
     row = Toggle(parent, row, "colorCostsByAffordability",
-        Text("Highlight affordable purchases", "Подсвечивать доступность покупки"))
+        Text("Highlight affordable purchases", "Подсвечивать доступность покупки"),
+        Text("Colors merchant prices according to whether you can afford the offer.", "Выделяет цены торговца цветом в зависимости от доступности покупки."))
     row = BuildPurchaseLimit(parent, row)
     row = Place(W:ChoiceRow(parent, Text("Sell by binding", "Продавать по привязке"), {
         all = Text("Any", "Любая"),
@@ -80,10 +84,19 @@ local function BuildSale(parent, select)
     row = Toggle(parent, row, "autoSellJunk", Text("Sell poor items when a merchant opens", "Продавать серый хлам при открытии торговца"),
         Text("Also applies when the standard merchant opens.", "Автопродажа хлама действует и при открытии штатного торговца."))
     row = Toggle(parent, row, "protectEquipmentSets",
-        Text("Protect equipment set items", "Беречь предметы из комплектов"))
+        Text("Protect equipment set items", "Беречь предметы из комплектов"),
+        Text("Prevents Vendor from selling items used in equipment sets.", "Запрещает Vendor продавать предметы из комплектов экипировки."))
+    row = Toggle(parent, row, "protectCraftingReagents",
+        Text("Protect crafting materials", "Беречь материалы для профессий"),
+        Text("Prevents manual selection and sale of crafting reagents. Automatic selection and junk sales always skip them.",
+            "Запрещает вручную выбирать и продавать материалы для профессий. Автоматическая отметка и продажа хлама всегда их пропускают."))
     row = Toggle(parent, row, "protectKnownBoundItems",
-        Text("Protect known bound items", "Защищать изученные привязанные предметы"))
-    Toggle(parent, row, "showItemLevelsOnIcons", Text("Show item levels", "Показывать уровни предметов"))
+        Text("Protect known bound items", "Защищать изученные привязанные предметы"),
+        Text("Prevents sale of bound items the client marks as already known. Unreadable bound items are protected too.",
+            "Запрещает продажу привязанных предметов с пометкой «Уже известно». Если данные недоступны, привязанный предмет также защищен."))
+    Toggle(parent, row, "showItemLevelsOnIcons", Text("Show item levels", "Показывать уровни предметов"),
+        Text("Shows item levels on equipment icons in the merchant and loot review.",
+            "Показывает уровень экипировки на значках у торговца и в разборе добычи."))
 end
 
 local function BuildExclusions(panel, parent)

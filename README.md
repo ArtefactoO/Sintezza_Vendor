@@ -1,6 +1,6 @@
 # Sintezza Vendor
 
-![Sintezza Vendor project logo](Docs/Logo.png)
+![Sintezza Vendor project logo](Docs/CurseForge/Logo.png)
 
 Search merchant stock and compare the proceeds from selling, auctioning, and disenchanting gear in WoW Forever.
 
@@ -12,8 +12,10 @@ Search merchant stock and compare the proceeds from selling, auctioning, and dis
 - **Last sale** above the balance shows the most recently sold stack. Confirm its buyback to see the next available stack in the same place.
 - Coin purchases within the configured limit go through immediately. The default limit is 100 gold. Set the limit to 0 in **Buying and selling** to confirm every purchase. Barter purchases and buybacks always ask for confirmation.
 - The footer provides a junk sale with confirmation and repair at merchants who offer it. Automatic junk sale is available in settings.
+- Sale confirmation lists each stack and its vendor price. Crafting materials can be selected manually unless their protection is enabled; automatic selection and junk sales always skip them.
+- Loot Review tints items without a merchant price red and shows a reason below the list when an item is protected from selection.
 - Open character exclusions from the merchant header or settings. Recognized fishing poles and selected profession tools in your bags are added automatically and announced in chat. Removing an exclusion manually prevents it from being re-added automatically for that character.
-- **Journal** keeps confirmed Vendor transactions for each character and can display previous sessions. Open **Journal data** to export, import, or clear entries. Import merges matching data for the current character and retains up to 100 sessions.
+- **Journal** keeps confirmed Vendor transactions for each character and can display previous sessions. New entries include the merchant NPC ID when available, allowing the client to provide its localized name. Older entries without an NPC ID retain their saved merchant name. Open **Journal data** to export, import, or clear entries. Import merges matching data for the current character and retains up to 100 sessions.
 
 ## Loot review
 
@@ -28,30 +30,42 @@ Mastercraft supplies advice and available prices first. If Mastercraft displays 
 | `/svendor review` | Loot review at the current merchant |
 | `/svendor logs` | Transaction journal |
 
-## Русский
-
-Sintezza Vendor добавляет в WoW Forever окно торговца с поиском, разбором добычи и журналом. **Требуется Sintezza Theme.** В теме можно выбрать английский или русский язык. Mastercraft, Auctionator и Sintezza Disenchant можно подключить для советов и оценок.
-
-- В каталоге есть сетка и список, поиск по названию, цены в золоте, жетонах и предметах. Стрелка переключает на штатное окно, значок мешочка возвращает в Vendor.
-- Блок «Последняя продажа» над балансом показывает последнюю проданную стопку. После подтвержденного выкупа на ее месте появляется следующая.
-- Покупки за монеты в пределах лимита проходят сразу. По умолчанию лимит равен 100 золотым. Введи 0 в разделе «Покупка и продажа», чтобы подтверждать каждую покупку. Обмен за валюту или предметы и выкуп всегда требуют подтверждения.
-- Внизу окна доступны продажа хлама с подтверждением и ремонт у подходящих торговцев. Автопродажа хлама включается отдельно в настройках.
-- Исключения персонажа открываются из шапки торговца или настроек. Распознанные удочки и некоторые инструменты профессий в сумках автоматически добавляются в исключения с сообщением в чат. Если снять исключение вручную, оно не будет добавлено автоматически повторно для этого персонажа.
-- Вкладка «Разбор добычи» сравнивает выручку у торговца с аукционом и распылением. Комиссия 5% учитывается один раз. «Отметить выгодные» выбирает стопки, для которых торговец дает больше. Исключения и советы Mastercraft оставить, выставить или распылить предмет учитываются при выборе. Если совет по добыче Mastercraft появляется только с Shift, зажми Shift при отметке. Резервные оценки из Auctionator и Sintezza Disenchant помечаются отдельно.
-- «Журнал» показывает подтвержденные покупки, продажи и выкуп текущего персонажа. «Данные журнала» открывают экспорт и импорт CSV и очистку. Импорт объединяет совпадающие записи и сохраняет до 100 сеансов.
-
-Команды перечислены в таблице выше. Настройки также открываются кнопкой в шапке окна торговца.
-
 ## Gallery
 
-![The merchant catalogue, last sale, and repair controls.](Docs/01-merchant-catalogue.png)
+![The merchant catalogue, search, and last-sale buyback.](Docs/CurseForge/01-merchant-catalogue.png)
 
-![Vendor, auction, and disenchant values per stack.](Docs/02-loot-review.png)
+**Merchant catalogue.** Search stock, view prices, and buy back the last sale.
 
-![Selected stacks rise to the top after Mark vendor picks.](Docs/03-mark-vendor-picks.gif)
+![Merchant stock displayed as full-width list rows.](Docs/CurseForge/02-merchant-list.png)
+
+**Merchant list.** Switch from the grid to full-width rows with item names and prices.
+
+![Items available for buyback and their prices.](Docs/CurseForge/03-buyback.png)
+
+**Buyback.** See which sold items you can recover and what each costs.
+
+![Vendor, auction, and disenchant estimates in Loot Review.](Docs/CurseForge/04-loot-review.png)
+
+**Loot Review.** Compare merchant proceeds with estimated auction and disenchant values per stack.
+
+![Sale confirmation with the selected stacks and total.](Docs/CurseForge/05-confirm-sale.png)
+
+**Confirm sale.** Check the selected stacks, their prices, and the total before selling.
+
+![The journal with sales, buybacks, and session totals.](Docs/CurseForge/06-journal.png)
+
+**Transaction journal.** Review sales, buybacks, and session totals.
+
+![Buying and selling settings with purchase limits and item protection.](Docs/CurseForge/07-selling-settings.png)
+
+**Buying and selling settings.** Set a purchase limit, configure item protection, and choose whether to sell poor items at merchants.
+
+![The character's searchable exclusions list.](Docs/CurseForge/08-exclusions.png)
+
+**Character exclusions.** Search the protection list and remove individual items when needed.
 
 ## License and inspiration
 
-Sintezza Vendor is available under the [MIT License](LICENSE). Sepheran’s Extended Vendor Forever inspired the searchable merchant catalogue. [Extended Vendor Forever](https://www.curseforge.com/wow/addons/extended-vendor-forever)
+Inspired by [Extended Vendor Forever](https://www.curseforge.com/wow/addons/extended-vendor-forever) by Sepheran. [MIT License](LICENSE).
 
 [CurseForge listing fields](CURSEFORGE.md)

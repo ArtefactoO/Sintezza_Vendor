@@ -56,7 +56,9 @@ jobs:
           interfaces = re.findall(r"^## Interface:[ \t]*([^\r\n]+)", toc, re.M)
           if len(interfaces) != 1 or "16001" not in interfaces[0].replace(" ", "").split(","):
               sys.exit("The TOC must declare Forever interface 16001.")
-          if f"## {version}" not in Path("CHANGELOG.md").read_text(encoding="utf-8-sig").splitlines():
+          changelog_path = Path("CHANGELOG.md")
+          changelog_source = changelog_path.read_bytes()
+          if f"## {version}" not in changelog_source.decode("utf-8-sig").splitlines():
               sys.exit("The changelog has no section for this version.")
           if f"package-as: {manifest.stem}" not in Path(".pkgmeta").read_text(encoding="utf-8-sig").splitlines():
               sys.exit("The .pkgmeta folder name differs from the TOC name.")
@@ -66,6 +68,14 @@ jobs:
                   path = Path(row.split(" [", 1)[0].replace("\\", "/"))
                   if not path.is_file() or not path.resolve().is_relative_to(Path.cwd()):
                       sys.exit(f"Missing or invalid TOC file: {path}")
+          newline = b"\r\n" if b"\r\n" in changelog_source else b"\n"
+          normalized_changelog = re.sub(
+              rb"(?m)^([-*+] [^\r\n]+)\r?\n(?:[ \t]*\r?\n)+(?=[-*+] )",
+              lambda match: match[1] + newline,
+              changelog_source,
+          )
+          if normalized_changelog != changelog_source:
+              changelog_path.write_bytes(normalized_changelog)
           if interfaces[0].strip() != "16001":
               manifest.write_bytes(re.sub(
                   rb"(?m)^(\xef\xbb\xbf)?## Interface:[^\r\n]*",
@@ -86,15 +96,15 @@ jobs:
           fi
           git diff --check
           if [[ "$CREATE_TAG" != true ]]; then
-            git diff -- "$manifest"
+            git diff -- "$manifest" CHANGELOG.md
             echo "Verified $tag on $GITHUB_SHA. No tag was created."
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet -- "$manifest"; then
-            git add -- "$manifest"
+          if ! git diff --quiet -- "$manifest" CHANGELOG.md; then
+            git add -- "$manifest" CHANGELOG.md
             git commit -m "Prepare $addon $RELEASE_VERSION for WoW Forever"
           fi
           git tag -a "$tag" -m "$addon $RELEASE_VERSION (Forever)"

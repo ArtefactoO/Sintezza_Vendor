@@ -1,54 +1,35 @@
 # Changelog
 
+## 2.3.0
+
+- Add optional Sintezza Perf developer measurements for loot review.
+- Dim excluded items in the loot review.
+- Allow non-equipment items when equipment-set membership is unavailable, and explain blocked selections in the review. Tint items the vendor will not buy red.
+- Save merchant IDs in new journal entries and look up their names in the client when available.
+- Show the item in purchase and buyback confirmations, and list each stack and its price in a themed, scrollable sale confirmation.
+- Allow manual selection of crafting materials, with an optional protection toggle; automatic selection and junk sales continue to skip them. Add help for sale settings.
+- Preload journal item names in the current client language so saved names from another language do not flash while browsing.
+- Match the exclusions button height to the settings button in the merchant header.
+- Record confirmed manual bag sales at merchants in the journal. Display item names in the current client language when available, and restore the version beside the merchant window title.
+
 ## 2.2.0
 
 - The settings header shows the addon version.
 - The merchant window shows the version beside the title.
 - Made the purchase limit field more compact and added a gold coin icon.
-
 - Reduced repeated bag scans and stabilized the exclusions list while item information loads.
 - Shortened the purchase-limit field and moved its explanation to a help tooltip.
-
 - Made exclusions compact with item icons and quality colors, and added a shortcut in the merchant window.
 - Moved all selling options into one list and clarified the binding filter.
 - Automatically exclude recognized profession tools in bags for each character, announce additions in chat, and preserve manual removals.
-
 - Left-clicking the minimap icon opens or closes the window.
-
 - Connected window scale, opacity, and layer to the shared Theme settings. The WoW AddOns settings launcher uses the shared Theme helper.
-
 - Updated the project logo and in-game addon icon.
-
 - Use Sintezza Disenchant estimates and restrictions whenever their API functions are available.
-
-### По-русски
-
-- В шапке настроек отображается версия аддона.
-- В окне торговца версия отображается рядом с названием.
-- Поле лимита покупки стало компактнее, рядом появился значок золота.
-
-- Сокращено повторное сканирование сумок; список исключений больше не пересортировывается во время загрузки данных предметов.
-- Поле лимита покупки стало короче, пояснение перенесено в подсказку.
-
-- Список исключений стал компактнее: добавлены иконки и цвета качества предметов, в окне торговца появился быстрый переход.
-- Все настройки продажи перенесены в общий список, действие фильтра привязки пояснено.
-- Распознанные инструменты профессий в сумках автоматически добавляются в исключения персонажа с сообщением в чат; ручное снятие исключения сохраняется.
-
-- ЛКМ по значку у миникарты открывает или закрывает окно.
-
-- Масштаб, непрозрачность и слой окон подключены к общим настройкам Theme. Страница в меню модификаций использует общую реализацию Theme.
-
-- Обновлены логотип проекта и игровая иконка аддона.
-
-- Разбор добычи использует оценки и ограничения Sintezza Disenchant, когда доступны соответствующие функции.
 
 ## 2.1.18
 
 - Mastercraft recommendations in Loot Review follow the selected Sintezza language.
-
-### По-русски
-
-- Советы Mastercraft в разборе добычи выводятся на выбранном языке Sintezza.
 
 ## 2.1.17
 
@@ -58,10 +39,6 @@
 ## 2.1.16
 
 - Added themed hints for quick-sale confirmations and the sale binding filter.
-
-### По-русски
-
-- Добавлены подсказки темы для подтверждения быстрой продажи и фильтра по привязке.
 
 ## 2.1.15
 

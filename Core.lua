@@ -159,8 +159,8 @@ local function Initialize()
     local function OpenSettings() E:OpenSettings() end
     ns.Launcher:RegisterSettings(title, OpenSettings)
     ns.Launcher:RegisterMinimap(title, icon, db.minimap, OpenSettings)
-    E:CreateLootReviewPopup()
-    E:CreateQuickSalePopup()
+    E:InstallManualSaleObserver()
+    E:PrefetchJournalItems()
 end
 
 SLASH_SINTEZZA_VENDOR1 = "/svendor"
@@ -203,6 +203,16 @@ local function QueueRefresh(scan)
 end
 
 local toolScanQueued, exclusionsRefreshQueued
+local manualSnapshotQueued
+local function QueueManualSnapshot()
+    if manualSnapshotQueued then return end
+    manualSnapshotQueued = true
+    C_Timer.After(.1, function()
+        manualSnapshotQueued = nil
+        if E.interaction then E:SnapshotManualSales() end
+    end)
+end
+
 local function QueueToolScan()
     if toolScanQueued then return end
     toolScanQueued = true
@@ -230,10 +240,12 @@ events:SetScript("OnEvent", function(_, event, itemID, loaded)
         local interaction = {}
         E.interaction = interaction
         E.merchantMessage = nil
+        E:SnapshotManualSales()
         C_Timer.After(0, function()
             if E.interaction ~= interaction or not E.profile or InCombatLockdown() or not E:HasActiveMerchant() then return end
             AttachMerchantButton()
             E:ScanProfessionTools()
+            E:SnapshotManualSales()
             if E.profile.showPanelOnVendor then E:OpenMerchantWindow() end
             if E.profile.autoSellJunk == true and E:CanUseSale() then
                 E:RequestQuickSale(E:GetJunkSaleItems(), false)
@@ -241,18 +253,24 @@ events:SetScript("OnEvent", function(_, event, itemID, loaded)
         end)
     elseif event == "MERCHANT_CLOSED" or event == "PLAYER_REGEN_DISABLED" then
         E.interaction = nil
+        E.manualSaleSnapshot = nil
         E:ShowStandardMerchant()
     elseif event == "PLAYER_REGEN_ENABLED" then
         E:ScanProfessionTools()
         if E.nativeMerchant and E.nativeMerchant.restoring then E:RestoreNativeMerchant() end
         AttachMerchantButton()
-    elseif event == "GET_ITEM_INFO_RECEIVED" and loaded then
+    elseif event == "GET_ITEM_INFO_RECEIVED" then
         itemID = ns.Public(itemID, "number")
-        if itemID and E.professionToolPending and E.professionToolPending[itemID] then QueueToolScan() end
-        if itemID and E:IsExcluded(itemID) then QueueExclusionsRefresh() end
-        if E:IsLootReviewOpen() or E.merchantWindow and E.merchantWindow:IsShown() then QueueRefresh(true) end
+        E:JournalItemInfoReceived(itemID, loaded)
+        if loaded then
+            if E.interaction then QueueManualSnapshot() end
+            if itemID and E.professionToolPending and E.professionToolPending[itemID] then QueueToolScan() end
+            if itemID and E:IsExcluded(itemID) then QueueExclusionsRefresh() end
+        end
+        if E:IsLootReviewOpen() or E.merchantWindow and E.merchantWindow:IsShown() then QueueRefresh(loaded) end
     elseif event == "BAG_UPDATE_DELAYED" then
         QueueToolScan()
+        if E.interaction then E:SnapshotManualSales() end
         if E:IsLootReviewOpen() or E.merchantWindow and E.merchantWindow:IsShown() then QueueRefresh(true) end
     elseif E:IsLootReviewOpen() or E.merchantWindow and E.merchantWindow:IsShown() then
         if event ~= "GET_ITEM_INFO_RECEIVED" then

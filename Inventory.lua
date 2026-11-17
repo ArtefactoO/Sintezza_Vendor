@@ -63,7 +63,7 @@ function vendor:GetBagItem(bag, slot)
         value = price and price * count,
         bound = Public(info.isBound, "boolean"),
         locked = Public(info.isLocked, "boolean") ~= false,
-        noValue = Public(info.hasNoValue, "boolean") ~= false,
+        noValue = Public(info.hasNoValue, "boolean"),
         equipmentSet = Public(inSet, "boolean"),
         classID = Public(classID, "number"), subclassID = Public(subclassID, "number"),
         bindType = Public(bindType, "number"), reagent = Public(reagent, "boolean"),
@@ -200,15 +200,30 @@ local function KnownBound(item)
     return false
 end
 
-function vendor:CanSellItem(item)
+function vendor:CanSellItem(item, allowReagent)
     if not item.guid or not item.equipLoc or item.locked then
         return false, Text("Item data is unavailable or the stack is locked.", "Данные недоступны или стопка заблокирована.")
     end
-    if item.noValue or not item.value or item.value <= 0 then
+    if item.noValue == nil or not item.value then
+        return false, Text("Vendor price is unavailable.", "Цена торговца недоступна.")
+    end
+    if item.noValue or item.value <= 0 then
         return false, Text("The vendor does not pay for this item.", "Торговец не платит за этот предмет.")
     end
-    local protectedSet = item.equipmentSet == nil or item.equipmentSet and self.profile.protectEquipmentSets ~= false
-    if item.reagent ~= false or protectedSet or item.quality >= 6 or item.classID == nil
+    local protectedSet = self.profile.protectEquipmentSets ~= false
+        and item.equipLoc ~= "" and item.equipmentSet ~= false
+    if item.reagent == nil then
+        return false, Text("Crafting material data is unavailable.", "Данные о материале для профессий недоступны.")
+    end
+    if item.reagent and (not allowReagent or self.profile.protectCraftingReagents == true) then
+        return false, Text("Crafting material is protected.", "Материал для профессий защищен.")
+    end
+    if protectedSet then
+        return false, item.equipmentSet == nil
+            and Text("Equipment set data is unavailable.", "Данные комплектов экипировки недоступны.")
+            or Text("Item belongs to a protected equipment set.", "Предмет входит в защищенный комплект экипировки.")
+    end
+    if item.quality >= 6 or item.classID == nil
         or item.classID == Enum.ItemClass.Profession
         or item.equipLoc == "INVTYPE_PROFESSION_TOOL" or item.equipLoc == "INVTYPE_PROFESSION_GEAR" then
         return false, Text("Protected item.", "Предмет защищен от продажи.")

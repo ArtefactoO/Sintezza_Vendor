@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sintezza Vendor · CurseForge</title>
+<style>
+:root { color-scheme: light dark; }
+body { font: 1rem/1.5 system-ui, sans-serif; margin: 0 auto; padding: 1.5rem; max-width: 54rem; }
+h1, h2 { line-height: 1.2; }
+section { margin-top: 1.75rem; }
+table { border-collapse: collapse; }
+th, td { text-align: left; vertical-align: top; padding: .35rem .6rem; border-bottom: 1px solid GrayText; }
+button { font: inherit; padding: .35rem .7rem; }
+textarea { display: block; font: .95rem/1.5 monospace; width: 100%; box-sizing: border-box; resize: vertical; margin: .7rem 0; padding: .6rem; }
+[role="status"] { margin-left: .6rem; }
+#changelog { border-top: 1px solid GrayText; padding-top: .5rem; }
+</style>
+</head>
+<body>
+<main>
+<h1>Sintezza Vendor</h1>
+<table aria-label="Поля CurseForge">
+<tbody>
+<tr><th scope="row">Game</th><td>World of Warcraft</td></tr>
+<tr><th scope="row">Class</th><td>Addons</td></tr>
+<tr><th scope="row">Flavor and version</th><td>Forever 1.60.1</td></tr>
+<tr><th scope="row">Main category</th><td>Bags &amp; Inventory</td></tr>
+<tr><th scope="row">Additional categories</th><td>Auction &amp; Economy, Data Export</td></tr>
+<tr><th scope="row">CurseForge relations</th><td>Sintezza Theme (Required Dependency), Mastercraft (Optional Dependency)</td></tr>
+<tr><th scope="row">Project license</th><td>MIT. See the repository for third-party notices.</td></tr>
+</tbody>
+</table>
+<section aria-labelledby="summary-title">
+<h2 id="summary-title">Summary</h2>
+<textarea id="summary" aria-labelledby="summary-title" lang="en" rows="2" readonly>Search merchants and compare vendor, auction, and disenchant values in WoW Forever.</textarea>
+<button type="button" data-copy="summary">Копировать Summary</button><span role="status"></span>
+</section>
+<section aria-labelledby="description-title">
+<h2 id="description-title">Description</h2>
+<p>Вставь в поле Description в режиме Markdown.</p>
+<textarea id="description" aria-labelledby="description-title" lang="en" rows="15" readonly>Sintezza Vendor gives WoW Forever merchants a searchable inventory and helps you compare what a stack is worth before you sell it.
+
+### Merchant
+
+![Searchable merchant grid with item prices and the last-sale shortcut](https://raw.githubusercontent.com/ArtefactoO/Sintezza_Vendor/main/Docs/CurseForge/01-merchant-catalogue.png)
+
+Search stock by item name, switch between grid and list views, and repair gear from the merchant window.
+
+### Buyback
+
+![Buyback tab showing items you can recover and their prices](https://raw.githubusercontent.com/ArtefactoO/Sintezza_Vendor/main/Docs/CurseForge/03-buyback.png)
+
+Use **Last sale** to recover the most recently sold item. Open **Buyback** to see the other items you can still recover and their prices.
+
+### Loot Review
+
+![Loot Review with Vendor, Auction, and Disenchant columns](https://raw.githubusercontent.com/ArtefactoO/Sintezza_Vendor/main/Docs/CurseForge/04-loot-review.png)
+
+Compare what the merchant pays with estimated auction proceeds after fees and estimated disenchant value. **Mark vendor picks** moves eligible stacks to the top and skips protected items and items Mastercraft recommends keeping, auctioning, or disenchanting. If Mastercraft shows advice only while you hold Shift, hold it when marking.
+
+![Sale confirmation with selected stacks, individual prices, and the total](https://raw.githubusercontent.com/ArtefactoO/Sintezza_Vendor/main/Docs/CurseForge/05-confirm-sale.png)
+
+Check the selected stacks and the total in **Confirm sale** before you sell.
+
+### Journal
+
+![Journal showing confirmed transactions and session totals](https://raw.githubusercontent.com/ArtefactoO/Sintezza_Vendor/main/Docs/CurseForge/06-journal.png)
+
+Review purchases, sales, and buybacks for the current character. Open **Journal data** to export or import the history as CSV.
+
+### Buying and selling settings
+
+Set an instant purchase limit and choose whether to protect equipment sets, crafting materials, and known bound items.
+
+![Searchable list of character-specific item exclusions](https://raw.githubusercontent.com/ArtefactoO/Sintezza_Vendor/main/Docs/CurseForge/08-exclusions.png)
+
+Use **Exclusions** to keep individual items out of sales for this character.
+
+### Appearance
+
+**Requires [Sintezza Theme](https://github.com/ArtefactoO/Sintezza_Theme).** Open `/stheme` to choose the palette and fonts for this addon&#x27;s windows.
+
+### Requirements
+
+Install [Mastercraft](https://www.curseforge.com/wow/addons/mastercraft) and enable its loot advice to use its recommendations and prices in **Loot Review**. [Auctionator](https://www.curseforge.com/wow/addons/auctionator) and [Sintezza Disenchant](https://github.com/ArtefactoO/Sintezza_Disenchant) can supply fallback estimates. The merchant, repair, buyback, and journal work with Theme alone.</textarea>
+<button type="button" data-copy="description">Копировать Description</button><span role="status"></span>
+</section>
+<section id="changelog" aria-labelledby="changelog-title">
+<h2 id="changelog-title">Changelog</h2>
+<p>Вставь в отдельное поле Changelog файла выпуска.</p>
+<textarea id="release-notes" aria-labelledby="changelog-title" lang="en" rows="6" readonly>### Changelog
+
+[View the release history on GitHub](https://github.com/ArtefactoO/Sintezza_Vendor/blob/main/CHANGELOG.md).
+
+Source, installation details, and credits are available on [GitHub](https://github.com/ArtefactoO/Sintezza_Vendor).</textarea>
+<button type="button" data-copy="release-notes">Копировать Changelog</button><span role="status"></span>
+</section>
+</main>
+<script>
+for (const button of document.querySelectorAll("[data-copy]")) {
+  button.addEventListener("click", async () => {
+    const field = document.getElementById(button.dataset.copy);
+    const status = button.nextElementSibling;
+    try {
+      await navigator.clipboard.writeText(field.value);
+      status.textContent = "Скопировано.";
+    } catch {
+      field.focus();
+      field.select();
+      status.textContent = "Текст выделен. Нажми Ctrl+C.";
+    }
+  });
+}
+</script>
+</body>
+</html>

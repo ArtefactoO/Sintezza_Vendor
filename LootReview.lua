@@ -2,7 +2,6 @@ local _, ns = ...
 local Text = ns.Text
 local E, T = ns.vendor, ns.Theme
 local widgets = Sintezza_Theme:CreateWidgets(T)
-local POPUP = "SINTEZZA_VENDOR_CONFIRM_LOOT"
 local ROW_HEIGHT = 34
 local MAX_ROWS = 24
 local AUCTION_CUT = .05
@@ -103,7 +102,7 @@ function E:ValidateLootReviewStack(expected, current)
         or not expected.guid or current.guid ~= expected.guid then
         return false, Text("the stack changed", "стопка изменилась")
     end
-    local ready, reason = self:CanSellItem(current)
+    local ready, reason = self:CanSellItem(current, expected.manualSale)
     if not ready then return false, reason end
     if expected.vendorOnly then
         ComparePrices(current, expected.advice)
@@ -130,11 +129,12 @@ function E:ScanLootReview(panel, items)
     local previous, selected = panel.selected, {}
     items = items or self:BagItems()
     for _, item in ipairs(items) do
-        item.sellable, item.reason = self:CanSellItem(item)
+        item.sellable, item.reason = self:CanSellItem(item, true)
         ComparePrices(item, panel.advice and panel.advice[item.key])
         local prior = previous[item.key]
         if prior and item.sellable and self:ValidateLootReviewStack(prior, item) then
             item.vendorOnly = prior.vendorOnly
+            item.manualSale = prior.manualSale
             selected[item.key] = item
         end
     end
@@ -181,6 +181,7 @@ local function CreateRow(panel, i)
     row.check:SetSize(18, 18)
     row.check:SetPoint("LEFT", row, "LEFT", 6, 0)
     T:SkinCheckButton(row.check, 16)
+    if row.check.SetMotionScriptsWhileDisabled then row.check:SetMotionScriptsWhileDisabled(true) end
     row.exclude = Button(row, "x", 22, function()
         local item = row.item
         if not item or E:LootReviewBusy() then return end
@@ -219,11 +220,18 @@ local function CreateRow(panel, i)
     row.name:SetPoint("RIGHT", row.prices[1], "LEFT", -8, 0)
     local function Click()
         local item = row.item
-        if item and item.sellable and not E:LootReviewBusy() then
+        if item and not E:LootReviewBusy() then
+            if not item.sellable then
+                panel.message = item.reason
+                E:RefreshLootReview(false)
+                return
+            end
+            panel.message = nil
             if panel.selected[item.key] then
                 panel.selected[item.key] = nil
             else
                 item.vendorOnly = nil
+                item.manualSale = true
                 panel.selected[item.key] = item
             end
         end
@@ -346,6 +354,7 @@ local function PaintPrices(row, item)
 end
 
 function E:RefreshLootReview(scan)
+    if ns.PerfBridge then ns.PerfBridge.Count("refresh") end
     if not self:IsLootReviewOpen() then return end
     local panel = self.lootReviewPanel
     if scan then self:ScanLootReview(panel) end
@@ -370,9 +379,15 @@ function E:RefreshLootReview(scan)
             PaintPrices(row, item)
             local checked = panel.selected[item.key] ~= nil
             row.check:SetChecked(checked)
-            Sintezza_Theme:Tint(row.fill, "SetColorTexture", checked and T.accentDim or T.text, checked and .30 or (i % 2 == 0 and .04 or .015))
-            SetEnabled(row.check, item.sellable and not busy)
+            local noVendorValue = item.noValue == true or item.value ~= nil and item.value <= 0
+            local fill = checked and T.accentDim or noVendorValue and T.danger or T.text
+            local alpha = checked and .30 or noVendorValue and .10 or (i % 2 == 0 and .04 or .015)
+            Sintezza_Theme:Tint(row.fill, "SetColorTexture", fill, alpha)
+            SetEnabled(row.check, not busy)
             local excluded = self:IsExcluded(item.itemID)
+            row.icon:SetDesaturated(excluded)
+            row.icon:SetAlpha(excluded and .55 or 1)
+            row.name:SetAlpha(excluded and .60 or 1)
             row.exclude.text:SetText(excluded and "+" or "x")
             SetEnabled(row.exclude, self.blacklist and not busy)
             T:PaintButton(row.exclude, excluded)
@@ -421,8 +436,8 @@ end
 
 function E:CancelLootReviewConfirmation()
     if not self.lootReviewConfirm then return end
+    self:HideSaleConfirmation()
     self.lootReviewConfirm = nil
-    StaticPopup_Hide(POPUP)
 end
 
 function E:CloseLootReview()
@@ -456,7 +471,7 @@ function E:SelectVendorWinners()
     panel.selected = {}
     self:ScanLootReview(panel, items)
     for _, item in ipairs(panel.items) do
-        if item.sellable then
+        if item.sellable and self:CanSellItem(item) then
             if not fallback and (not item.advice or item.priceFallback) then
                 fallback = Text("Partial Mastercraft data · fallback", "Часть данных Mastercraft недоступна · резервная оценка")
             end
@@ -479,7 +494,14 @@ function E:ConfirmLootReview()
     local pending = SelectedSale(self.lootReviewPanel)
     if not pending then return end
     self.lootReviewConfirm = pending
-    if not StaticPopup_Show(POPUP, tostring(#pending.items), Money(pending.total), pending) then self.lootReviewConfirm = nil end
+    local function Cancel()
+        if self.lootReviewConfirm ~= pending then return end
+        self.lootReviewConfirm = nil
+        self:RefreshLootReview(false)
+    end
+    if not self:ShowSaleConfirmation(pending.items, pending.total, function() self:AcceptLootReview(pending) end, Cancel) then
+        self.lootReviewConfirm = nil
+    end
     self:RefreshLootReview(false)
 end
 
@@ -499,27 +521,6 @@ function E:AcceptLootReview(pending)
     end
     self.lootReviewPanel.message = Text("Selling selected items…", "Продажа выбранных вещей…")
     self:BeginSale(pending.items)
-end
-
-function E:CreateLootReviewPopup()
-    StaticPopupDialogs[POPUP] = {
-        text = Text("Sell the selected stacks (%s) for %s?", "Продать выбранные стопки (%s) за %s?"),
-        button1 = Text("Sell", "Продать"),
-        button2 = CANCEL or Text("Cancel", "Отмена"),
-        timeout = 0,
-        hideOnEscape = 1,
-        OnAccept = function(_, pending) E:AcceptLootReview(pending) end,
-        OnCancel = function(_, pending)
-            if E.lootReviewConfirm ~= pending then return end
-            E.lootReviewConfirm = nil
-            E:RefreshLootReview(false)
-        end,
-        OnHide = function(_, pending)
-            if E.lootReviewConfirm ~= pending then return end
-            E.lootReviewConfirm = nil
-            E:RefreshLootReview(false)
-        end,
-    }
 end
 
 function E:LootReviewSaleFinished(queue, stopped)

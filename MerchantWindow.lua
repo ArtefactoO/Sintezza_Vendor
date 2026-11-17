@@ -226,13 +226,14 @@ local function DrawCard(card, item, kind)
     T:PaintItemBorder(card.border, item.quality)
     local color = ITEM_QUALITY_COLORS[item.quality or 1]
     local prefix = kind == "journal" and ((kinds[item.kind] or "") .. " · ") or ""
-    card.title:SetText(prefix .. (color and color.hex or "") .. (item.name or "?") .. "|r"
+    local name = kind == "journal" and E:GetJournalItemName(item) or item.name
+    card.title:SetText(prefix .. (color and color.hex or "") .. (name or "?") .. "|r"
         .. ((item.count or item.quantity or 1) > 1 and (" ×" .. (item.count or item.quantity)) or ""))
     local equip = kind == "catalog" and (item.classID == 2 or item.classID == 4)
     card.level:SetText(E.profile.showItemLevelsOnIcons and equip and item.itemLevel or "")
     local text
     if kind == "journal" then
-        text = FormatLogCost(item) .. "  ·  " .. (item.vendor or "") .. "  ·  " .. TimeText("%H:%M", item.time)
+        text = FormatLogCost(item) .. "  ·  " .. (E:GetJournalVendorName(item) or "") .. "  ·  " .. TimeText("%H:%M", item.time)
     else
         text = E:OfferPrice(item) .. (item.stock == 0 and Text(" · Sold out", " · Нет в наличии") or "")
     end
@@ -426,8 +427,9 @@ local function CreateWindow()
     settings:SetWidth(100)
     settings:SetPoint("RIGHT", header.close, "LEFT", -4, 0)
     local exclusions = CreateFrame("Button", nil, header, "BackdropTemplate")
-    exclusions:SetSize(24, 24)
-    exclusions:SetPoint("RIGHT", settings, "LEFT", -4, 0)
+    exclusions:SetWidth(24)
+    exclusions:SetPoint("TOPRIGHT", settings, "TOPLEFT", -4, 0)
+    exclusions:SetPoint("BOTTOMRIGHT", settings, "BOTTOMLEFT", -4, 0)
     T:SkinButton(exclusions)
     for index = 1, 3 do
         local line = exclusions:CreateTexture(nil, "ARTWORK")
@@ -449,7 +451,7 @@ local function CreateWindow()
         GameTooltip:Show()
     end)
     exclusions:HookScript("OnLeave", function(self) if GameTooltip:IsOwned(self) then GameTooltip:Hide() end end)
-    header.title:SetPoint("RIGHT", exclusions, "LEFT", -8, 0)
+    if not header.version then header.title:SetPoint("RIGHT", exclusions, "LEFT", -8, 0) end
     header:EnableMouse(true)
     header:RegisterForDrag("LeftButton")
     header:SetScript("OnDragStart", function()
@@ -573,6 +575,7 @@ local function CreateWindow()
         frame.vendorDragging = nil
         frame:StopMovingOrSizing()
         frame.search:ClearFocus()
+        if E.quickSale then E:CancelSaleActions() end
         E:CancelPurchase()
         E:CloseLootReview()
         E:MerchantViewHidden()
@@ -596,6 +599,7 @@ function E:OpenMerchantWindow(tab)
     self.merchantWindow = self.merchantWindow or CreateWindow()
     local window = self.merchantWindow
     if window.tab ~= tab then
+        if self.quickSale then self:CancelSaleActions() end
         self:CancelPurchase()
         self:CloseLootReview()
         window.tab, window.page = tab, 1

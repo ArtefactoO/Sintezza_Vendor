@@ -4,13 +4,13 @@
 ## X-License: MIT
 ## Notes: Merchant catalogue, bag sales, loot review and transaction history.
 ## Notes-ruRU: Каталог торговца, продажа из сумок, разбор добычи и журнал.
-## Version: 2.2.0
+## Version: 2.3.0
 ## Category: Bags & Inventory
 ## Category-ruRU: Сумки и инвентарь
 ## IconTexture: Interface\AddOns\Sintezza_Vendor\Media\Icon
 ## SavedVariables: Sintezza_VendorDB
 ## Dependencies: Sintezza_Theme
-## OptionalDeps: Auctionator, Sintezza_Disenchant, Mastercraft
+## OptionalDeps: Auctionator, Sintezza_Disenchant, Mastercraft, Sintezza_Perf
 
 Locales.lua
 Launcher.lua
@@ -24,3 +24,4 @@ Catalog.lua
 MerchantWindow.lua
 Settings.lua
 Core.lua
+PerfBridge.lua

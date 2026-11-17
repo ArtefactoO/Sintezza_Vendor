@@ -5,11 +5,87 @@ function E:MerchantName()
     return Public(UnitName("npc"), "string") or Text("Vendor", "Торговец")
 end
 
+function E:MerchantIdentity()
+    local name = self:MerchantName()
+    local guid = UnitGUID and Public(UnitGUID("npc"), "string")
+    local kind, id
+    if guid then kind, id = guid:match("^(%a+)%-[^%-]+%-[^%-]+%-[^%-]+%-[^%-]+%-(%d+)") end
+    return name, (kind == "Creature" or kind == "Vehicle") and tonumber(id) or nil
+end
+
+function E:GetJournalVendorName(entry)
+    local id = Public(entry.vendorID, "number")
+    if not id or id < 1 or id ~= math.floor(id) then return entry.vendor end
+    self.journalVendorNames = self.journalVendorNames or {}
+    if self.journalVendorNames[id] then return self.journalVendorNames[id] end
+    local getTooltip = C_TooltipInfo and C_TooltipInfo.GetHyperlink
+    if getTooltip then
+        local ok, raw = pcall(getTooltip, "unit:Creature-0-0-0-0-" .. id)
+        local data = ok and Public(raw, "table")
+        local lines = data and Public(data.lines, "table")
+        local line = lines and Public(lines[1], "table")
+        local name = line and Public(line.leftText, "string")
+        if name and name ~= "" then self.journalVendorNames[id] = name; return name end
+    end
+    return entry.vendor
+end
+
 function E:GetJournal()
     return self.character and self.character.transactionLogs
 end
 
-function E:RecordTransaction(kind, item, count, money, vendor, currencies)
+local function JournalItemID(entry)
+    local itemID = Public(entry.itemID, "number")
+    local link = Public(entry.link, "string")
+    return itemID or link and tonumber(link:match("|Hitem:(%d+)"))
+end
+
+function E:GetJournalItemName(entry)
+    local itemID = JournalItemID(entry)
+    if itemID then
+        local name = Public((C_Item.GetItemInfo(itemID)), "string")
+        if name then return name end
+        if self.journalItemFailures and self.journalItemFailures[itemID] then
+            return Text("Item #", "Предмет №") .. itemID
+        end
+        return Text("Loading item...", "Загрузка предмета...")
+    end
+    return entry.name
+end
+
+function E:JournalItemInfoReceived(itemID, loaded)
+    if not itemID then return end
+    self.journalItemFailures = self.journalItemFailures or {}
+    if loaded then self.journalItemFailures[itemID] = nil else self.journalItemFailures[itemID] = true end
+end
+
+function E:PrefetchJournalItems()
+    local ids, seen = {}, {}
+    for _, session in ipairs(self:GetJournal() or {}) do
+        for _, entry in ipairs(type(session.entries) == "table" and session.entries or {}) do
+            local itemID = type(entry) == "table" and JournalItemID(entry)
+            if itemID and not seen[itemID] then
+                seen[itemID] = true
+                ids[#ids + 1] = itemID
+            end
+        end
+    end
+    local generation = {}
+    self.journalPrefetch = generation
+    local index = 1
+    local function LoadBatch()
+        if E.journalPrefetch ~= generation then return end
+        local last = math.min(index + 19, #ids)
+        while index <= last do
+            C_Item.GetItemInfo(ids[index])
+            index = index + 1
+        end
+        if index <= #ids then C_Timer.After(0, LoadBatch) end
+    end
+    C_Timer.After(0, LoadBatch)
+end
+
+function E:RecordTransaction(kind, item, count, money, vendor, currencies, vendorID)
     local sessions = self:GetJournal()
     if not sessions then return end
     local timestamp = time()
@@ -21,7 +97,7 @@ function E:RecordTransaction(kind, item, count, money, vendor, currencies)
         if #sessions > 100 then table.remove(sessions, 1) end
     end
     session.entries[#session.entries + 1] = {
-        kind = kind, time = timestamp, vendor = vendor, name = item.name, link = item.link,
+        kind = kind, time = timestamp, vendor = vendor, vendorID = vendorID, name = item.name, link = item.link,
         texture = item.texture, quality = item.quality, itemID = item.itemID,
         quantity = count, gold = money, currencies = currencies,
     }
@@ -78,8 +154,11 @@ local function SerializeRow(startedAt, entry)
         currencies = Payload():EncodeRecord(entry.currencies)
         if not currencies then return end
     end
+    local vendor = entry.vendor or ""
+    local vendorID = Integer(entry.vendorID, 1, 2147483647)
+    if vendorID then vendor = vendor .. " [NPC#" .. vendorID .. "]" end
     return {
-        tostring(startedAt or entry.time or ""), tostring(entry.time or ""), entry.kind or "", entry.vendor or "",
+        tostring(startedAt or entry.time or ""), tostring(entry.time or ""), entry.kind or "", vendor,
         entry.name or "", entry.link or "", tostring(entry.texture or ""), tostring(entry.quality or ""),
         tostring(entry.itemID or ""), tostring(entry.quantity or ""), tostring(entry.gold or ""), currencies,
     }
@@ -90,7 +169,7 @@ local function ReadRow(row)
     local timestamp = Integer(row[2], 1, 4102444800)
     local quantity, gold = Integer(row[10], 1, 2147483647), Integer(row[11], 0, 9007199254740991)
     local quality, itemID = Integer(row[8], 0, 8), Integer(row[9], 1, 2147483647)
-    if not (session and timestamp and kinds[row[3]] and Plain(row[4], 200) and Plain(row[5], 300)
+    if not (session and timestamp and kinds[row[3]] and Plain(row[4], 220) and Plain(row[5], 300)
         and row[5] ~= "" and Link(row[6]) and Texture(row[7]) and quantity and gold)
         or not (quality or row[8] == "") or not (itemID or row[9] == "") then return end
 
@@ -116,8 +195,12 @@ local function ReadRow(row)
         end
         if #currencies ~= #raw then return end
     end
+    local vendor, id = row[4]:match("^(.-) %[NPC#(%d+)%]$")
+    local vendorID = id and Integer(id, 1, 2147483647)
+    if not vendorID then vendor = row[4] end
+    if not Plain(vendor, 200) then return end
     return session, {
-        time = timestamp, kind = row[3], vendor = row[4], name = row[5], link = row[6] ~= "" and row[6] or nil,
+        time = timestamp, kind = row[3], vendor = vendor, vendorID = vendorID, name = row[5], link = row[6] ~= "" and row[6] or nil,
         texture = tonumber(row[7]) or row[7] ~= "" and row[7] or nil, quality = quality, itemID = itemID,
         quantity = quantity, gold = gold, currencies = currencies,
     }
@@ -224,7 +307,7 @@ local spec = {
     export = Export,
     stage = Stage,
     apply = Apply,
-    changed = function() E:RefreshMerchantWindow() end,
+    changed = function() E:PrefetchJournalItems(); E:RefreshMerchantWindow() end,
     sections = { {
         label = Text("Transactions", "Записи журнала"),
         count = Count,

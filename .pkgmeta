@@ -1,4 +1,6 @@
 package-as: Sintezza_Vendor
+ignore:
+  - Docs/CurseForge
 manual-changelog:
   filename: CHANGELOG.md
   markup-type: markdown

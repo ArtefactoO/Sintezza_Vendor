@@ -150,7 +150,7 @@ local function Purchase(self, offer)
     if not coins or not total then
         return PurchaseMessage(self, Text("Could not read the current balance.", "Не удалось получить данные о деньгах или предметах."))
     end
-    local name = self:MerchantName()
+    local name, vendorID = self:MerchantIdentity()
     local costs = {}
     for _, cost in ipairs(current.costs or {}) do
         local before = Balance(cost.currencyID, cost.itemID)
@@ -187,7 +187,7 @@ local function Purchase(self, offer)
             end
         end
         if verified then
-            self:RecordTransaction(current.buyback and "buyback" or "buy", current, current.count, current.price, name, current.costs)
+            self:RecordTransaction(current.buyback and "buyback" or "buy", current, current.count, current.price, name, current.costs, vendorID)
             self.merchantMessage = current.buyback and Text("Bought back.", "Предмет выкуплен.") or Text("Purchased.", "Покупка завершена.")
         elseif attempts < 18 then
             C_Timer.After(.10, Check)
@@ -218,8 +218,15 @@ function E:RequestPurchase(offer)
     self.purchaseDialog = self.purchaseDialog or self:CreatePurchasePopup()
     local dialog = self.purchaseDialog
     self.purchaseConfirm, self.merchantMessage = offer, nil
-    local label = offer.name .. (offer.count > 1 and (" ×" .. offer.count) or "")
-    dialog.details:SetText(Text("Buy %s for %s?", "Купить %s за %s?"):format(label, self:OfferPrice(offer)))
+    dialog.header.title:SetText(offer.buyback and Text("Buyback", "Выкуп") or Text("Purchase", "Покупка"))
+    dialog.action.text:SetText(offer.buyback and Text("Buy back", "Выкупить") or Text("Buy", "Купить"))
+    local color = ITEM_QUALITY_COLORS[offer.quality or 1]
+    dialog.itemName:SetText((color and color.hex or "") .. offer.name .. "|r"
+        .. (offer.count > 1 and (" ×" .. offer.count) or ""))
+    dialog.itemIcon:SetTexture(offer.texture or 134400)
+    ns.Theme:PaintItemBorder(dialog.itemBorder, offer.quality)
+    dialog.price:SetText(self:OfferPrice(offer))
+    dialog.item = offer
     dialog:Show()
     dialog:Raise()
     self:RefreshMerchantWindow()
@@ -241,7 +248,7 @@ function E:CreatePurchasePopup()
     local W = Sintezza_Theme:CreateWidgets(T)
     local dialog = CreateFrame("Frame", "Sintezza_VendorPurchaseWindow", self.merchantWindow or UIParent, "BackdropTemplate")
     dialog:Hide()
-    dialog:SetSize(414, 144)
+    dialog:SetSize(414, 156)
     dialog:SetPoint("CENTER", UIParent, "CENTER")
     if dialog.SetIgnoreParentAlpha then dialog:SetIgnoreParentAlpha(true) end
     if dialog.SetIgnoreParentScale then dialog:SetIgnoreParentScale(true) end
@@ -250,10 +257,28 @@ function E:CreatePurchasePopup()
     dialog:EnableMouse(true)
     T:WindowSurface(dialog)
     local header = W:WindowHeader(dialog, { title = Text("Purchase", "Покупка"), icon = ns.Icon })
-    dialog.details = W:Label(dialog, "", 12, T.text)
-    dialog.details:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 14, -8)
-    dialog.details:SetPoint("BOTTOMRIGHT", dialog, "BOTTOMRIGHT", -14, 42)
-    dialog.details:SetWordWrap(true)
+    dialog.header = header
+    local item = CreateFrame("Frame", nil, dialog)
+    item:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 14, -12)
+    item:SetSize(36, 36)
+    dialog.itemIcon = item:CreateTexture(nil, "ARTWORK")
+    dialog.itemIcon:SetAllPoints()
+    dialog.itemIcon:SetTexCoord(.07, .93, .07, .93)
+    dialog.itemBorder = T:FrameIcon(item, dialog.itemIcon)
+    item:EnableMouse(true)
+    item:SetScript("OnEnter", function(owner)
+        if not dialog.item or not dialog.item.link then return end
+        GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+        GameTooltip:SetHyperlink(dialog.item.link)
+        GameTooltip:Show()
+    end)
+    item:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    dialog.itemName = W:Label(dialog, "", 12, T.text)
+    dialog.itemName:SetPoint("TOPLEFT", item, "TOPRIGHT", 10, -2)
+    dialog.itemName:SetPoint("RIGHT", dialog, "RIGHT", -14, 0)
+    dialog.itemName:SetWordWrap(false)
+    dialog.price = W:Label(dialog, "", 11, T.muted)
+    dialog.price:SetPoint("BOTTOMLEFT", item, "BOTTOMRIGHT", 10, 2)
     local cancel = W:Button(dialog, Text("Cancel", "Отмена"), function() dialog:Hide() end)
     cancel:SetSize(112, 24)
     cancel:SetPoint("BOTTOMRIGHT", -12, 10)
@@ -263,9 +288,11 @@ function E:CreatePurchasePopup()
     end, true)
     buy:SetSize(112, 24)
     buy:SetPoint("RIGHT", cancel, "LEFT", -6, 0)
+    dialog.action = buy
     dialog:HookScript("OnHide", function()
         if dialog:IsShown() then dialog:Hide() end
         self.purchaseConfirm = nil
+        dialog.item = nil
         self:RefreshMerchantWindow()
     end)
     UISpecialFrames[#UISpecialFrames + 1] = dialog:GetName()
