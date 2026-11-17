@@ -12,6 +12,7 @@ Search merchant stock and compare the proceeds from selling, auctioning, and dis
 - **Last sale** above the balance shows the most recently sold stack. Confirm its buyback to see the next available stack in the same place.
 - Coin purchases within the configured limit go through immediately. The default limit is 100 gold. Set the limit to 0 in **Buying and selling** to confirm every purchase. Barter purchases and buybacks always ask for confirmation.
 - The footer provides a junk sale with confirmation and repair at merchants who offer it. Automatic junk sale is available in settings.
+- Open character exclusions from the merchant header or settings. Recognized fishing poles and selected profession tools in your bags are added automatically and announced in chat. Removing an exclusion manually prevents it from being re-added automatically for that character.
 - **Journal** keeps confirmed Vendor transactions for each character and can display previous sessions. Open **Journal data** to export, import, or clear entries. Import merges matching data for the current character and retains up to 100 sessions.
 
 ## Loot review
@@ -35,6 +36,7 @@ Sintezza Vendor добавляет в WoW Forever окно торговца с �
 - Блок «Последняя продажа» над балансом показывает последнюю проданную стопку. После подтвержденного выкупа на ее месте появляется следующая.
 - Покупки за монеты в пределах лимита проходят сразу. По умолчанию лимит равен 100 золотым. Введи 0 в разделе «Покупка и продажа», чтобы подтверждать каждую покупку. Обмен за валюту или предметы и выкуп всегда требуют подтверждения.
 - Внизу окна доступны продажа хлама с подтверждением и ремонт у подходящих торговцев. Автопродажа хлама включается отдельно в настройках.
+- Исключения персонажа открываются из шапки торговца или настроек. Распознанные удочки и некоторые инструменты профессий в сумках автоматически добавляются в исключения с сообщением в чат. Если снять исключение вручную, оно не будет добавлено автоматически повторно для этого персонажа.
 - Вкладка «Разбор добычи» сравнивает выручку у торговца с аукционом и распылением. Комиссия 5% учитывается один раз. «Отметить выгодные» выбирает стопки, для которых торговец дает больше. Исключения и советы Mastercraft оставить, выставить или распылить предмет учитываются при выборе. Если совет по добыче Mastercraft появляется только с Shift, зажми Shift при отметке. Резервные оценки из Auctionator и Sintezza Disenchant помечаются отдельно.
 - «Журнал» показывает подтвержденные покупки, продажи и выкуп текущего персонажа. «Данные журнала» открывают экспорт и импорт CSV и очистку. Импорт объединяет совпадающие записи и сохраняет до 100 сеансов.
 

@@ -27,7 +27,7 @@ local function DisenchantPrice(item)
         or (item.classID and item.classID ~= 2 and item.classID ~= 4) then return nil, false, true end
     if not item.equipLoc or not item.classID then return end
     local api = Sintezza_DisenchantAPI
-    if api and api.version == 1 and api.GetDisenchantEstimate then
+    if type(api) == "table" and type(api.GetDisenchantEstimate) == "function" then
         local ok, copper, missing = pcall(api.GetDisenchantEstimate, item)
         if ok and SafeNumber(copper) and copper > 0 then
             return copper * item.count, not (SafeNumber(missing) and missing == 0)
@@ -63,10 +63,10 @@ local function ComparePrices(item, advice)
     local price = advice and advice.disenchant
     local api = Sintezza_DisenchantAPI
     local checked, blocked
-    if api and api.version == 1 and api.IsDisenchantBlocked then
+    if type(api) == "table" and type(api.IsDisenchantBlocked) == "function" then
         checked, blocked = pcall(api.IsDisenchantBlocked, item)
     end
-    if checked and blocked == true then
+    if checked and not (issecretvalue and issecretvalue(blocked)) and blocked == true then
         item.partial, item.disenchantUnavailable = false, true
     elseif price and price > 0 then
         disenchant = AfterAuctionCut(price * item.count, advice.afterAuctionCut)

@@ -95,11 +95,93 @@ end
 
 function vendor:SetExcluded(itemID, excluded)
     if not self.blacklist or type(itemID) ~= "number" then return end
+    if self.character then
+        self.character.professionToolOverrides = self.character.professionToolOverrides or {}
+        self.character.professionToolOverrides[itemID] = not excluded and true or nil
+        self.character.professionToolOverrides[tostring(itemID)] = nil
+    end
     self.blacklist[tostring(itemID)] = nil
     self.blacklist[itemID] = excluded and true or nil
     self:RefreshMerchantWindow()
     self:RefreshLootReview(true)
     self:RefreshExclusions()
+end
+
+local professionToolIDs = {
+    [2901] = true, [5956] = true, [6219] = true, [7005] = true,
+    [6256] = true, [12225] = true,
+    [6218] = true, [6339] = true, [11130] = true, [11145] = true, [16207] = true,
+}
+
+function vendor:IsProfessionTool(item)
+    if item.reagent ~= false then return false end
+    if professionToolIDs[item.itemID] then return true end
+    if item.equipLoc == "INVTYPE_PROFESSION_TOOL" or item.equipLoc == "INVTYPE_PROFESSION_GEAR" then return true end
+    local classes, weapons = Enum and Enum.ItemClass, Enum and Enum.ItemWeaponSubclass
+    return classes and weapons and weapons.Fishingpole and item.classID == classes.Weapon
+        and item.subclassID == weapons.Fishingpole or false
+end
+
+function vendor:ScanProfessionTools()
+    if not self.character or not self.blacklist or InCombatLockdown() then return end
+    local overrides = self.character.professionToolOverrides
+    if type(overrides) ~= "table" then overrides = {}; self.character.professionToolOverrides = overrides end
+    local complete, changed, pending = true, false, {}
+    self.professionToolPending = pending
+    for bag = 0, NUM_BAG_SLOTS do
+        local slots = Public(C_Container.GetContainerNumSlots(bag), "number")
+        if not slots then complete = false else
+            for slot = 1, slots do
+                local info = Public(C_Container.GetContainerItemInfo(bag, slot), "table")
+                if info then
+                    local id, link = Public(info.itemID, "number"), Public(info.hyperlink, "string")
+                    local item
+                    if id and C_Item.GetItemInfoInstant then
+                        local instantID, _, _, equipLoc, _, classID, subclassID = C_Item.GetItemInfoInstant(id)
+                        instantID, equipLoc = Public(instantID, "number"), Public(equipLoc, "string")
+                        classID, subclassID = Public(classID, "number"), Public(subclassID, "number")
+                        local possible = professionToolIDs[id] or equipLoc == "INVTYPE_PROFESSION_TOOL"
+                            or equipLoc == "INVTYPE_PROFESSION_GEAR"
+                            or (Enum and Enum.ItemClass and Enum.ItemWeaponSubclass and classID == Enum.ItemClass.Weapon
+                                and subclassID == Enum.ItemWeaponSubclass.Fishingpole)
+                        if not instantID or not equipLoc or not classID or not subclassID then
+                            complete, pending[id] = false, true
+                            C_Item.GetItemInfo(id)
+                        elseif possible then
+                            pending[id] = true
+                            local name, itemLink, _, _, _, _, _, _, _, _, _, _, _, _, _, _, reagent = C_Item.GetItemInfo(link or id)
+                            if not Public(name, "string") or Public(reagent, "boolean") == nil then
+                                complete, pending[id] = false, true
+                            else
+                                pending[id] = nil
+                                item = { itemID = id, link = link or Public(itemLink, "string"), reagent = reagent,
+                                    equipLoc = equipLoc, classID = classID, subclassID = subclassID }
+                            end
+                        end
+                    elseif id then
+                        item = self:GetBagItem(bag, slot)
+                        if not item or item.reagent == nil then complete, pending[id] = false, true end
+                    else
+                        complete = false
+                    end
+                    if item and item.link and self:IsProfessionTool(item) and not self:IsExcluded(item.itemID)
+                        and not overrides[item.itemID] and not overrides[tostring(item.itemID)] then
+                        self.blacklist[item.itemID] = true
+                        changed = true
+                        if DEFAULT_CHAT_FRAME then
+                            DEFAULT_CHAT_FRAME:AddMessage("Sintezza Vendor: " .. Text("Added to exclusions: ", "Добавлено в исключения: ") .. item.link)
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if complete then self.character.professionToolsInitialized = true end
+    if changed then
+        self:RefreshExclusions()
+        self:RefreshLootReview(true)
+        self:RefreshMerchantWindow()
+    end
 end
 
 local function KnownBound(item)
@@ -136,6 +218,10 @@ function vendor:CanSellItem(item)
     end
     if self:IsExcluded(item.itemID) then
         return false, Text("Excluded in your Vendor profile.", "Предмет исключен в профиле Vendor.")
+    end
+    local overrides = self.character and self.character.professionToolOverrides
+    if self:IsProfessionTool(item) and not (overrides and (overrides[item.itemID] or overrides[tostring(item.itemID)])) then
+        return false, Text("Profession tool is protected.", "Инструмент профессии защищен от продажи.")
     end
     local binding = self.profile.sellBindingFilter
     if binding == "boe" and (item.bindType ~= 2 or item.bound ~= false)

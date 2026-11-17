@@ -1,4 +1,4 @@
-local _, ns = ...
+local addonName, ns = ...
 local E, T, Text, Public = ns.vendor, ns.Theme, ns.Text, ns.Public
 local W = Sintezza_Theme:CreateWidgets(T)
 local labels = ns.MerchantLabels
@@ -421,11 +421,35 @@ local function CreateWindow()
     frame:SetMovable(true)
     frame:Hide()
     T:WindowSurface(frame)
-    local header = W:WindowHeader(frame, { title = "Sintezza Vendor", icon = ns.Icon })
+    local header = W:WindowHeader(frame, { title = "Sintezza Vendor", addonName = addonName, icon = ns.Icon })
     local settings = W:Button(header, Text("Settings", "Настройки"), function() E:OpenSettings() end)
     settings:SetWidth(100)
     settings:SetPoint("RIGHT", header.close, "LEFT", -4, 0)
-    header.title:SetPoint("RIGHT", settings, "LEFT", -8, 0)
+    local exclusions = CreateFrame("Button", nil, header, "BackdropTemplate")
+    exclusions:SetSize(24, 24)
+    exclusions:SetPoint("RIGHT", settings, "LEFT", -4, 0)
+    T:SkinButton(exclusions)
+    for index = 1, 3 do
+        local line = exclusions:CreateTexture(nil, "ARTWORK")
+        line:SetColorTexture(unpack(T.accent))
+        line:SetSize(9, 1)
+        line:SetPoint("TOPLEFT", 4, -5 - (index - 1) * 5)
+    end
+    for index = 1, 2 do
+        local stroke = exclusions:CreateTexture(nil, "ARTWORK")
+        stroke:SetColorTexture(unpack(T.accent))
+        stroke:SetSize(8, 1.5)
+        stroke:SetPoint("BOTTOMRIGHT", -3, 5)
+        stroke:SetRotation(index == 1 and math.pi / 4 or -math.pi / 4)
+    end
+    exclusions:SetScript("OnClick", function() E:OpenSettings("excluded") end)
+    exclusions:HookScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText(Text("Exclusions", "Исключения"))
+        GameTooltip:Show()
+    end)
+    exclusions:HookScript("OnLeave", function(self) if GameTooltip:IsOwned(self) then GameTooltip:Hide() end end)
+    header.title:SetPoint("RIGHT", exclusions, "LEFT", -8, 0)
     header:EnableMouse(true)
     header:RegisterForDrag("LeftButton")
     header:SetScript("OnDragStart", function()

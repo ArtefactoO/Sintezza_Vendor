@@ -6,6 +6,9 @@ local windowAppearance = Sintezza_Theme:NewWindowPreferences(function() return E
     return { scale = (tonumber(profile.uiScale) or 1) * 100, layer = profile.merchantFrameStrata }
 end)
 E.windowAppearance = windowAppearance
+if Sintezza_Theme.RegisterGlobalWindowPreferences then
+    Sintezza_Theme:RegisterGlobalWindowPreferences("Sintezza Vendor", windowAppearance)
+end
 
 local function Print(message)
     DEFAULT_CHAT_FRAME:AddMessage(title .. ": " .. message)
@@ -190,7 +193,7 @@ local function QueueRefresh(scan)
     rescanReview = rescanReview or scan
     if refreshQueued then return end
     refreshQueued = true
-    C_Timer.After(0, function()
+    C_Timer.After(.1, function()
         refreshQueued = nil
         local rescan = rescanReview
         rescanReview = nil
@@ -199,10 +202,30 @@ local function QueueRefresh(scan)
     end)
 end
 
-events:SetScript("OnEvent", function(_, event, _, loaded)
+local toolScanQueued, exclusionsRefreshQueued
+local function QueueToolScan()
+    if toolScanQueued then return end
+    toolScanQueued = true
+    C_Timer.After(.1, function()
+        toolScanQueued = nil
+        E:ScanProfessionTools()
+    end)
+end
+
+local function QueueExclusionsRefresh()
+    if exclusionsRefreshQueued then return end
+    exclusionsRefreshQueued = true
+    C_Timer.After(.1, function()
+        exclusionsRefreshQueued = nil
+        E:RefreshExclusions()
+    end)
+end
+
+events:SetScript("OnEvent", function(_, event, itemID, loaded)
     if event == "PLAYER_LOGIN" then
         Initialize()
         AttachMerchantButton()
+        QueueToolScan()
     elseif event == "MERCHANT_SHOW" then
         local interaction = {}
         E.interaction = interaction
@@ -210,6 +233,7 @@ events:SetScript("OnEvent", function(_, event, _, loaded)
         C_Timer.After(0, function()
             if E.interaction ~= interaction or not E.profile or InCombatLockdown() or not E:HasActiveMerchant() then return end
             AttachMerchantButton()
+            E:ScanProfessionTools()
             if E.profile.showPanelOnVendor then E:OpenMerchantWindow() end
             if E.profile.autoSellJunk == true and E:CanUseSale() then
                 E:RequestQuickSale(E:GetJunkSaleItems(), false)
@@ -219,10 +243,16 @@ events:SetScript("OnEvent", function(_, event, _, loaded)
         E.interaction = nil
         E:ShowStandardMerchant()
     elseif event == "PLAYER_REGEN_ENABLED" then
+        E:ScanProfessionTools()
         if E.nativeMerchant and E.nativeMerchant.restoring then E:RestoreNativeMerchant() end
         AttachMerchantButton()
     elseif event == "GET_ITEM_INFO_RECEIVED" and loaded then
-        E:RefreshExclusions()
+        itemID = ns.Public(itemID, "number")
+        if itemID and E.professionToolPending and E.professionToolPending[itemID] then QueueToolScan() end
+        if itemID and E:IsExcluded(itemID) then QueueExclusionsRefresh() end
+        if E:IsLootReviewOpen() or E.merchantWindow and E.merchantWindow:IsShown() then QueueRefresh(true) end
+    elseif event == "BAG_UPDATE_DELAYED" then
+        QueueToolScan()
         if E:IsLootReviewOpen() or E.merchantWindow and E.merchantWindow:IsShown() then QueueRefresh(true) end
     elseif E:IsLootReviewOpen() or E.merchantWindow and E.merchantWindow:IsShown() then
         if event ~= "GET_ITEM_INFO_RECEIVED" then
