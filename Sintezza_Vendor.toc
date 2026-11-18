@@ -4,7 +4,7 @@
 ## X-License: MIT
 ## Notes: Merchant catalogue, bag sales, loot review and transaction history.
 ## Notes-ruRU: Каталог торговца, продажа из сумок, разбор добычи и журнал.
-## Version: 2.3.0
+## Version: 2.3.1
 ## Category: Bags & Inventory
 ## Category-ruRU: Сумки и инвентарь
 ## IconTexture: Interface\AddOns\Sintezza_Vendor\Media\Icon

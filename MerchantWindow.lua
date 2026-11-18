@@ -296,8 +296,8 @@ local function RepairTip(tooltip)
     if cost then tooltip:AddLine(Coins(cost)) end
 end
 
-local function RepairAll(useGuild)
-    if not E:CanInteract() or E:LootReviewBusy() then return end
+function E:RepairAll(useGuild)
+    if type(RepairAllItems) ~= "function" or not self:CanInteract() or self:LootReviewBusy() then return end
     local repair, guild = RepairServices()
     local cost = RepairCost()
     if not repair or not cost then return end
@@ -538,10 +538,10 @@ local function CreateWindow()
     end)
     frame.repairAll = ns.CreateMerchantIcon(frame.tools, {
         atlas = "SpellIcon-256x256-RepairAll", texture = "Interface\\Icons\\Trade_BlackSmithing", crop = .13,
-    }, labels.repairAll, function() RepairAll(false) end, RepairTip)
+    }, labels.repairAll, function() E:RepairAll(false) end, RepairTip)
     frame.repairGuild = ns.CreateMerchantIcon(frame.tools, {
         atlas = "SpellIcon-256x256-RepairAllGuild", texture = "Interface\\Icons\\INV_Misc_Coin_01", crop = .13,
-    }, labels.repairGuild, function() RepairAll(true) end, function(tooltip)
+    }, labels.repairGuild, function() E:RepairAll(true) end, function(tooltip)
         RepairTip(tooltip)
         tooltip:AddLine(labels.repairGuildTip, .85, .8, .68, true)
     end)

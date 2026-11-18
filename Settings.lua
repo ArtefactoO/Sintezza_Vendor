@@ -83,6 +83,9 @@ local function BuildSale(parent, select)
     end
     row = Toggle(parent, row, "autoSellJunk", Text("Sell poor items when a merchant opens", "Продавать серый хлам при открытии торговца"),
         Text("Also applies when the standard merchant opens.", "Автопродажа хлама действует и при открытии штатного торговца."))
+    row = Toggle(parent, row, "autoRepair", Text("Auto-repair", "Автопочинка"),
+        Text("Repairs all items with your own gold when you open a merchant that offers repairs.",
+            "Чинит все вещи за твое золото при открытии торговца, который умеет ремонтировать."))
     row = Toggle(parent, row, "protectEquipmentSets",
         Text("Protect equipment set items", "Беречь предметы из комплектов"),
         Text("Prevents Vendor from selling items used in equipment sets.", "Запрещает Vendor продавать предметы из комплектов экипировки."))

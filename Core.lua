@@ -143,6 +143,7 @@ local function Initialize()
     profile.purchaseLimitGold = ns.ParsePurchaseLimit(profile.purchaseLimitGold) or 100
     profile.sellBindingFilter = profile.sellBindingFilter == "boe" and "boe"
         or profile.sellBindingFilter == "sb" and "sb" or "all"
+    profile.autoRepair = profile.autoRepair == true
     for _, key in ipairs({ "showPanelOnVendor", "protectEquipmentSets" }) do
         profile[key] = profile[key] ~= false
     end
@@ -247,6 +248,7 @@ events:SetScript("OnEvent", function(_, event, itemID, loaded)
             E:ScanProfessionTools()
             E:SnapshotManualSales()
             if E.profile.showPanelOnVendor then E:OpenMerchantWindow() end
+            if E.profile.autoRepair then E:RepairAll(false) end
             if E.profile.autoSellJunk == true and E:CanUseSale() then
                 E:RequestQuickSale(E:GetJunkSaleItems(), false)
             end

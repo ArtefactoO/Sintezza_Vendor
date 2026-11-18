@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.3.1
+
+- Add an Auto-repair checkbox in Buying and selling. When enabled, it repairs items with personal funds as soon as you open a merchant that offers repairs.
+
 ## 2.3.0
 
 - Add optional Sintezza Perf developer measurements for loot review.

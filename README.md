@@ -12,6 +12,7 @@ Search merchant stock and compare the proceeds from selling, auctioning, and dis
 - **Last sale** above the balance shows the most recently sold stack. Confirm its buyback to see the next available stack in the same place.
 - Coin purchases within the configured limit go through immediately. The default limit is 100 gold. Set the limit to 0 in **Buying and selling** to confirm every purchase. Barter purchases and buybacks always ask for confirmation.
 - The footer provides a junk sale with confirmation and repair at merchants who offer it. Automatic junk sale is available in settings.
+- Enable **Auto-repair** in **Buying and selling** to repair all items with your own gold when you visit a merchant who offers repairs. It is off by default.
 - Sale confirmation lists each stack and its vendor price. Crafting materials can be selected manually unless their protection is enabled; automatic selection and junk sales always skip them.
 - Loot Review tints items without a merchant price red and shows a reason below the list when an item is protected from selection.
 - Open character exclusions from the merchant header or settings. Recognized fishing poles and selected profession tools in your bags are added automatically and announced in chat. Removing an exclusion manually prevents it from being re-added automatically for that character.
