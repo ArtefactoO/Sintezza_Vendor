@@ -172,7 +172,7 @@ local function CreateCard(parent)
     local card = CreateFrame("Button", nil, parent, "BackdropTemplate")
     T:Backdrop(card, T.panel, T.lineSoft)
     card:EnableMouse(true)
-    card:RegisterForClicks("LeftButtonUp")
+    card:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     local iconBox = CreateFrame("Frame", nil, card)
     iconBox:SetSize(34, 34)
     iconBox:SetPoint("LEFT", 7, 0)
@@ -195,6 +195,7 @@ local function CreateCard(parent)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         if self.kind == "catalog" then
             GameTooltip:SetMerchantItem(item.index)
+            GameTooltip:AddLine(Text("Right-click to choose quantity", "ПКМ — выбрать количество"), .82, .82, .82)
         elseif self.kind == "buyback" then
             GameTooltip:SetBuybackItem(item.index)
         elseif item.link then
@@ -208,10 +209,12 @@ local function CreateCard(parent)
         self:SetBackdropBorderColor(unpack(T.lineSoft))
         if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
     end)
-    card:SetScript("OnClick", function(self)
+    card:SetScript("OnClick", function(self, button)
         local item = self.item
         if not item or InCombatLockdown() then return end
-        if item.link and IsModifiedClick("CHATLINK") then
+        if button == "RightButton" then
+            if self.kind == "catalog" then E:RequestPurchase(item, true) end
+        elseif item.link and IsModifiedClick("CHATLINK") then
             HandleModifiedItemClick(item.link)
         elseif self.kind ~= "journal" then
             E:RequestPurchase(item)

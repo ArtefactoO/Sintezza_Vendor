@@ -9,6 +9,7 @@ Search merchant stock and compare the proceeds from selling, auctioning, and dis
 ## Shopping and selling
 
 - Search the merchant catalogue by name in grid or list view. Use **Buyback** to recover sold items, and the arrow in the merchant window to switch to the standard WoW merchant.
+- Right-click a catalogue item to choose how many to buy and see the total. **Max** fills the largest quantity you can buy in one transaction.
 - **Last sale** above the balance shows the most recently sold stack. Confirm its buyback to see the next available stack in the same place.
 - Coin purchases within the configured limit go through immediately. The default limit is 100 gold. Set the limit to 0 in **Buying and selling** to confirm every purchase. Barter purchases and buybacks always ask for confirmation.
 - The footer provides a junk sale with confirmation and repair at merchants who offer it. Automatic junk sale is available in settings.

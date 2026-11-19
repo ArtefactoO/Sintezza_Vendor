@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.3.2
+
+- Right-click items in the merchant catalogue to choose a purchase quantity, see the total cost, or buy the largest available stack.
+- Drag the purchase or buyback confirmation by its title bar while Vendor windows are unlocked.
+
 ## 2.3.1
 
 - Add an Auto-repair checkbox in Buying and selling. When enabled, it repairs items with personal funds as soon as you open a merchant that offers repairs.
