@@ -115,102 +115,135 @@ function E:HideSaleConfirmation()
     if self.saleDialog then self.saleDialog:Hide() end
 end
 
-local function SaleKey(itemID, price, count)
-    return itemID .. ":" .. price .. ":" .. count
+local function ReadSaleState(money)
+    money = money or Public(GetMoney(), "number")
+    local count = Public(GetNumBuybackItems(), "number")
+    if not money or not count then return end
+    local offers = {}
+    for index = 1, count do
+        local name, _, price, quantity = GetBuybackItemInfo(index)
+        local link = Public(GetBuybackItemLink(index), "string")
+        local identity = link or Public(name, "string")
+        price, quantity = Public(price, "number"), Public(quantity, "number")
+        if not identity or not price or not quantity then return end
+        offers[index] = { key = identity .. "\001" .. price .. "\001" .. quantity, price = price,
+            itemID = link and tonumber(link:match("|Hitem:(%d+)")), count = quantity }
+    end
+    return { money = money, offers = offers }
 end
 
-local function BuybackCounts()
-    local matches = {}
-    local count = Public(GetNumBuybackItems(), "number")
-    if not count then return end
+local function RetainedBuybacksMatch(before, after, count)
+    local offset = #before - count
+    if offset < 0 then return false end
     for index = 1, count do
-        local _, _, price, quantity = GetBuybackItemInfo(index)
-        local link = Public(GetBuybackItemLink(index), "string")
-        price, quantity = Public(price, "number"), Public(quantity, "number")
-        if not link or not price or not quantity then return end
-        local itemID = tonumber(link:match("|Hitem:(%d+)"))
-        if not itemID then return end
-        local key = SaleKey(itemID, price, quantity)
-        matches[key] = (matches[key] or 0) + 1
+        if before[offset + index].key ~= after[index].key then return false end
     end
-    return matches
+    return true
+end
+
+local function FirstNewSale(old, current, gained)
+    if gained <= 0 or #current < #old then return end
+    local total = 0
+    for index = #current, 1, -1 do
+        total = total + current[index].price
+        if total >= gained then
+            local retained = index - 1
+            local limit = Public(BUYBACK_ITEMS_PER_PAGE, "number") or 12
+            -- A full buyback list can drop its oldest entries as new sales arrive.
+            if total == gained and (retained == #old or #current == limit)
+                and RetainedBuybacksMatch(old, current, retained) then return index end
+            return
+        end
+    end
+end
+
+function E:CapturePurchaseSales(money, buyback)
+    local snapshot = self.manualSaleSnapshot
+    if not buyback and snapshot and snapshot.money == money then return snapshot end
+    return ReadSaleState(money)
+end
+
+function E:CountItemsInMatchingSales(before, offer, afterCoins, price)
+    local proceeds = afterCoins - before.money + price
+    if proceeds <= 0 then return end
+    local after = ReadSaleState(afterCoins)
+    if not after then return end
+    local old = before.offers
+    if offer.buyback then
+        local remaining = {}
+        if not old[offer.index] then return end
+        for index, row in ipairs(old) do
+            if index ~= offer.index then remaining[#remaining + 1] = row end
+        end
+        old = remaining
+    end
+    local first = FirstNewSale(old, after.offers, proceeds)
+    if not first then return end
+    local count = 0
+    if offer.itemID and not offer.currencyID then
+        for index = first, #after.offers do
+            local row = after.offers[index]
+            if row.itemID == offer.itemID then count = count + row.count end
+        end
+    end
+    return count
+end
+
+function E:AccountForPurchaseSales(before, offer, price)
+    local snapshot = self.manualSaleSnapshot
+    if not snapshot then return end
+    snapshot.money = snapshot.money - price
+    if not offer.buyback then return end
+    local bought = before and before.offers[offer.index]
+    local previous = snapshot.offers[offer.index]
+    if bought and previous and bought.key == previous.key then table.remove(snapshot.offers, offer.index) end
 end
 
 function E:SnapshotManualSales()
-    if not self:HasActiveMerchant() or InCombatLockdown() then return end
-    local buybacks = BuybackCounts()
-    if not buybacks then self.manualSaleSnapshot = nil; return end
-    local snapshot = {}
-    for _, item in ipairs(self:BagItems()) do
-        if item.value and item.value > 0 then
-            item.saleKey = SaleKey(item.itemID, item.value, item.count)
-            item.buybackCount = buybacks[item.saleKey] or 0
-            snapshot[item.bag .. ":" .. item.slot] = item
-        end
-    end
-    self.manualSaleSnapshot = snapshot
+    if self:HasActiveMerchant() and not InCombatLockdown() then self.manualSaleSnapshot = ReadSaleState() end
 end
 
-function E:InstallManualSaleObserver()
-    if self.manualSaleObserver then return end
-    self.manualSaleObserver = true
-    hooksecurefunc(C_Container, "UseContainerItem", function(bag, slot)
-        if E.saleActive or E.purchaseActive or not E.interaction or not E:CanUseSale() then return end
-        if not Public(bag, "number") or not Public(slot, "number") then return end
-        local item = E.manualSaleSnapshot and E.manualSaleSnapshot[bag .. ":" .. slot]
-        if not item or item.buybackCount == nil then return end
-        E.manualSalePending = E.manualSalePending or {}
-        local group = E.manualSalePending[item.saleKey]
-        if not group or group.interaction ~= E.interaction then
-            group = { interaction = E.interaction, baseline = item.buybackCount, confirmed = 0, slots = {} }
-            E.manualSalePending[item.saleKey] = group
+function E:ObserveManualSales(final, merchantUpdated)
+    if self.saleActive or not self:HasActiveMerchant() or InCombatLockdown() then return end
+    if self.purchaseActive then return false end
+    local before, after = self.manualSaleSnapshot, ReadSaleState()
+    if not after then return false end
+    local sameBuybacks = before and #before.offers == #after.offers
+        and RetainedBuybacksMatch(before.offers, after.offers, #after.offers)
+    local firstSale = before and (merchantUpdated or not sameBuybacks)
+        and FirstNewSale(before.offers, after.offers, after.money - before.money)
+    if not firstSale and before and not final and after.money >= before.money then
+        if after.money > before.money or not sameBuybacks then return false end
+    end
+    self.manualSaleSnapshot = after
+    if not firstSale then return end
+
+    local vendor, vendorID = self:MerchantIdentity()
+    local singleItem
+    for index = firstSale, #after.offers do
+        local item = self:GetOffer(index, true)
+        if item then
+            self:RecordTransaction("sell", item, item.count, after.offers[index].price, vendor, nil, vendorID)
+            if index == firstSale and index == #after.offers then singleItem = item end
         end
-        local slotKey = bag .. ":" .. slot
-        if group.slots[slotKey] then return end
-        local interaction = E.interaction
-        local vendor, vendorID = E:MerchantIdentity()
-        local pending = {}
-        group.slots[slotKey] = pending
-        local function Release()
-            group.slots[slotKey] = nil
-            if not next(group.slots) and E.manualSalePending[item.saleKey] == group then
-                E.manualSalePending[item.saleKey] = nil
-            end
-        end
-        local checks = 0
-        local function ConfirmManualSale()
-            if group.slots[slotKey] ~= pending then return end
-            if E.interaction ~= interaction or InCombatLockdown() then Release(); return end
-            local raw = C_Container.GetContainerItemInfo(bag, slot)
-            local current = Public(raw, "table")
-            local currentID = current and Public(current.itemID, "number")
-            local buybacks = BuybackCounts()
-            if not (issecretvalue and issecretvalue(raw)) and raw == nil
-                and buybacks and (buybacks[item.saleKey] or 0) > group.baseline + group.confirmed then
-                group.confirmed = group.confirmed + 1
-                Release()
-                E:RecordTransaction("sell", item, item.count, item.value, vendor, nil, vendorID)
-                E:SnapshotManualSales()
-                E:RefreshMerchantWindow()
-                return
-            end
-            checks = checks + 1
-            if checks >= MAX_CHECKS or currentID and currentID ~= item.itemID then
-                Release()
-                E:SnapshotManualSales()
-            else
-                C_Timer.After(CHECK_INTERVAL, ConfirmManualSale)
-            end
-        end
-        C_Timer.After(CHECK_INTERVAL, ConfirmManualSale)
-    end)
+    end
+    self:RefreshMerchantBalanceAndStatus()
+    self:QueueMerchantRefresh()
+    local window = self.merchantWindow
+    self:ShowTransactionAmount("sell", singleItem, singleItem and singleItem.count, after.money - before.money, nil,
+        window and window.balance)
 end
 
 local function Finish(queue, stopped)
     if E.saleActive ~= queue then return end
     E.saleActive = nil
+    if E.interaction == queue.interaction then E:SnapshotManualSales() end
     E:LootReviewSaleFinished(queue, stopped)
     E:RefreshMerchantWindow()
+    if queue.unshownProceeds and E.interaction == queue.interaction then
+        local item = queue.unshownItem
+        E:ShowTransactionAmount("sell", item, item and item.count, queue.unshownProceeds)
+    end
 end
 
 local function SellNext(queue)
@@ -224,8 +257,9 @@ local function SellNext(queue)
         return
     end
 
-    local moneyBefore = GetMoney()
-    if (issecretvalue and issecretvalue(moneyBefore)) or type(moneyBefore) ~= "number" then
+    local beforeSale = ReadSaleState()
+    local moneyBefore = beforeSale and beforeSale.money or Public(GetMoney(), "number")
+    if not moneyBefore then
         Finish(queue, true)
         return
     end
@@ -238,11 +272,32 @@ local function SellNext(queue)
     local function ConfirmSale()
         if E.saleActive ~= queue then return end
         local slotID, money = C_Container.GetContainerItemID(bag, slot), GetMoney()
+        local proceeds
         if not (issecretvalue and (issecretvalue(slotID) or issecretvalue(money)))
-            and slotID == nil and type(money) == "number" and money - moneyBefore == expected.value then
+            and slotID == nil and type(money) == "number" and money > moneyBefore then
+            local gain = money - moneyBefore
+            if gain == expected.value then
+                proceeds = gain
+            elseif beforeSale then
+                local afterSale = ReadSaleState()
+                local first = afterSale and FirstNewSale(beforeSale.offers, afterSale.offers, gain)
+                local item = first and first == #afterSale.offers and E:GetOffer(first, true)
+                if item and item.itemID == expected.itemID then proceeds = gain end
+            end
+        end
+        if proceeds then
             queue.soldStacks = queue.soldStacks + 1
-            queue.soldTotal = queue.soldTotal + expected.value
-            E:RecordTransaction("sell", expected, expected.count, expected.value, queue.vendorName, nil, queue.vendorID)
+            queue.soldTotal = queue.soldTotal + proceeds
+            E:RecordTransaction("sell", expected, expected.count, proceeds, queue.vendorName, nil, queue.vendorID)
+            if E.interaction == queue.interaction then
+                local anchor = E:FindSaleAmountAnchor(expected)
+                if anchor then
+                    E:ShowTransactionAmount("sell", expected, expected.count, proceeds, nil, anchor)
+                else
+                    queue.unshownItem = not queue.unshownProceeds and expected or nil
+                    queue.unshownProceeds = (queue.unshownProceeds or 0) + proceeds
+                end
+            end
             queue.index = queue.index + 1
             SellNext(queue)
             return
@@ -260,7 +315,8 @@ end
 function E:BeginSale(items)
     if self.saleActive or self.purchaseActive or #items == 0 then return end
     local vendorName, vendorID = self:MerchantIdentity()
-    local queue = { items = items, index = 1, soldStacks = 0, soldTotal = 0, vendorName = vendorName, vendorID = vendorID }
+    local queue = { items = items, index = 1, soldStacks = 0, soldTotal = 0, vendorName = vendorName, vendorID = vendorID,
+        interaction = self.interaction }
     self.saleActive = queue
     self:RefreshLootReview(false)
     SellNext(queue)

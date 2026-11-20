@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.3.3
+
+- Match the game's merchant clicks in the Sintezza catalogue. Right-click buys one batch, left-click picks it up, and the game's Split Stack shortcut opens the Sintezza quantity dialog.
+- Show the catalogue highlight and a larger check mark as soon as the purchase is confirmed.
+- Use a smaller purchase window with quantity step buttons and a smooth transition when the total changes.
+- Float the cost over purchased items, the proceeds over visible sold items, and the returned quantity and cost on buyback.
+- Keep catalogue redraws off the purchase click path and detect ordinary bag sales from actual proceeds and new buyback entries.
+- Queue rapid coin purchases, cache the catalogue between stock updates, and reconcile overlapping purchases and bag sales.
+
 ## 2.3.2
 
 - Right-click items in the merchant catalogue to choose a purchase quantity, see the total cost, or buy the largest available stack.

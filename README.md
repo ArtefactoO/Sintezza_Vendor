@@ -9,9 +9,9 @@ Search merchant stock and compare the proceeds from selling, auctioning, and dis
 ## Shopping and selling
 
 - Search the merchant catalogue by name in grid or list view. Use **Buyback** to recover sold items, and the arrow in the merchant window to switch to the standard WoW merchant.
-- Right-click a catalogue item to choose how many to buy and see the total. **Max** fills the largest quantity you can buy in one transaction.
+- Right-click a catalogue item to buy one batch, or left-click to pick up a batch and place it in a bag. Use the game's **Split Stack** shortcut (Shift-click by default) to choose a quantity in the Vendor window. **−** and **+** change it by one batch, and **Max** fills the largest quantity available in one transaction.
 - **Last sale** above the balance shows the most recently sold stack. Confirm its buyback to see the next available stack in the same place.
-- Coin purchases within the configured limit go through immediately. The default limit is 100 gold. Set the limit to 0 in **Buying and selling** to confirm every purchase. Barter purchases and buybacks always ask for confirmation.
+- Coin purchases within the configured limit start immediately. Each additional right-click queues one batch while the previous purchase settles. Vendor checks the offer again before sending it. The default limit is 100 gold. Set the limit to 0 in **Buying and selling** to confirm every purchase. Barter purchases and buybacks always ask for confirmation.
 - The footer provides a junk sale with confirmation and repair at merchants who offer it. Automatic junk sale is available in settings.
 - Enable **Auto-repair** in **Buying and selling** to repair all items with your own gold when you visit a merchant who offers repairs. It is off by default.
 - Sale confirmation lists each stack and its vendor price. Crafting materials can be selected manually unless their protection is enabled; automatic selection and junk sales always skip them.

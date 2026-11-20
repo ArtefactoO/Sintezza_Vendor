@@ -326,9 +326,9 @@ local function CreatePanel(parent)
     return panel
 end
 
-function E:LootReviewBusy()
+function E:LootReviewBusy(ignorePurchaseQueue)
     return self.saleActive or self.lootReviewConfirm or self.quickSale or self.purchaseActive
-        or self.purchaseConfirm or InCombatLockdown()
+        or self.purchaseConfirm or (not ignorePurchaseQueue and self.purchaseQueue) or InCombatLockdown()
 end
 
 local function SetEnabled(button, enabled)

@@ -103,13 +103,14 @@ local function PurchaseBatchLimit(offer)
     -- The API caps the number of items per transaction, and stock is counted in merchant batches.
     local batches = math.floor(maxStack / offer.count)
     if offer.stock >= 0 then batches = math.min(batches, offer.stock) end
-    return batches
+    return batches, maxStack
 end
 
 local function AffordableBatches(offer)
-    local batches = PurchaseBatchLimit(offer)
+    local batches, maxStack = PurchaseBatchLimit(offer)
     local money = Public(GetMoney(), "number")
     if not batches or not money then return end
+    if maxStack <= 1 then return 0 end
     if offer.price > 0 then batches = math.min(batches, math.floor(money / offer.price)) end
     for _, cost in ipairs(offer.costs or {}) do
         local amount = Balance(cost.currencyID, cost.itemID)
@@ -117,6 +118,26 @@ local function AffordableBatches(offer)
         batches = math.min(batches, math.floor(amount / cost.amount))
     end
     return batches
+end
+
+local function WatchPurchase(self, check)
+    self.purchaseCheck = check
+    if check() then return end
+
+    local remaining = 18
+    local function Poll()
+        if self.purchaseCheck ~= check then return end
+        remaining = remaining - 1
+        if not check(remaining == 0) then C_Timer.After(.10, Poll) end
+    end
+    C_Timer.After(.10, Poll)
+end
+
+function E:CheckCursorPurchase(interactionEnded)
+    if not self.cursorPurchase or (not interactionEnded and Public(GetCursorInfo(), "string") == "merchant") then return end
+    local check = self.cursorPurchase
+    self.cursorPurchase = nil
+    WatchPurchase(self, check)
 end
 
 local function PurchaseTotal(offer, batches)
@@ -160,11 +181,11 @@ end
 
 local function PurchaseMessage(self, message)
     self.merchantMessage = message
-    self:RefreshMerchantWindow()
+    self:RefreshMerchantBalanceAndStatus()
 end
 
-local function PurchaseBlocker(self)
-    if self:LootReviewBusy() then
+local function PurchaseBlocker(self, fromQueue)
+    if self:LootReviewBusy(fromQueue) then
         return Text("Finish the current transaction first.", "Сначала заверши текущую операцию.")
     end
     if not self:CanInteract() then
@@ -173,18 +194,53 @@ local function PurchaseBlocker(self)
     end
 end
 
-local function Purchase(self, offer, batches)
-    local blocker = PurchaseBlocker(self)
+local function CanBuyImmediately(self, offer)
+    local limit = self.profile.purchaseLimitGold
+    return not offer.buyback and offer.extended == false and limit > 0
+        and offer.price and offer.price <= limit * COPPER_PER_GOLD
+end
+
+local Purchase
+local function ScheduleNextPurchase(self)
+    local queue = self.purchaseQueue
+    if not queue or queue.scheduled then return end
+    queue.scheduled = true
+    C_Timer.After(0, function()
+        if self.purchaseQueue ~= queue then return end
+        if self.interaction ~= queue.interaction then self.purchaseQueue = nil; return end
+        queue.scheduled = false
+        local offer = table.remove(queue, 1)
+        if #queue == 0 then self.purchaseQueue = nil end
+        if not CanBuyImmediately(self, offer) then
+            self.purchaseQueue = nil
+            PurchaseMessage(self, Text("The purchase now needs confirmation.", "Теперь покупка требует подтверждения."))
+        elseif not Purchase(self, offer, nil, false, true) then
+            self.purchaseQueue = nil
+        end
+    end)
+end
+
+Purchase = function(self, offer, batches, pickup, fromQueue)
+    local blocker = PurchaseBlocker(self, fromQueue)
     if blocker then return PurchaseMessage(self, blocker) end
     local current = self:GetOffer(offer.index, offer.buyback)
     if not current or Signature(current) ~= Signature(offer) then
+        self:InvalidateMerchantCatalogue()
+        self:QueueMerchantRefresh()
         return PurchaseMessage(self, Text("The offer changed. Check the price.", "Предложение изменилось. Проверь цену."))
+    end
+    if current.stock ~= offer.stock or current.available ~= offer.available then
+        self:InvalidateMerchantCatalogue()
+        self:QueueMerchantRefresh()
     end
     local order = PurchaseTotal(current, batches)
     local allowed, reason = self:CanBuyOffer(current, order)
     if not allowed then return PurchaseMessage(self, reason) end
     if batches and batches > (PurchaseBatchLimit(current) or 0) then
         return PurchaseMessage(self, Text("That quantity is no longer available.", "Это количество больше недоступно."))
+    end
+    if pickup and (MerchantFrame.extendedCost or MerchantFrame.highPrice) then
+        return PurchaseMessage(self, Text("Right-click to buy this item.", "Нажми ПКМ, чтобы купить этот товар."))
     end
 
     local coins = Public(GetMoney(), "number")
@@ -193,6 +249,8 @@ local function Purchase(self, offer, batches)
         return PurchaseMessage(self, Text("Could not read the current balance.", "Не удалось получить данные о деньгах или предметах."))
     end
     local name, vendorID = self:MerchantIdentity()
+    local interaction = self.interaction
+    local saleState = self:CapturePurchaseSales(coins, current.buyback)
     local costs = {}
     for _, cost in ipairs(order.costs or {}) do
         local before = Balance(cost.currencyID, cost.itemID)
@@ -205,24 +263,29 @@ local function Purchase(self, offer, batches)
     local ok, result
     if current.buyback then
         ok, result = pcall(BuybackItem, current.index)
+    elseif pickup then
+        ok, result = pcall(PickupMerchantItem, current.index)
     elseif batches and batches > 1 then
         ok, result = pcall(BuyMerchantItem, current.index, order.count)
     else
         ok, result = pcall(BuyMerchantItem, current.index)
     end
-    if not ok or Public(result, "boolean") == false then
+    if not ok or Public(result, "boolean") == false or (pickup and Public(GetCursorInfo(), "string") ~= "merchant") then
         self.purchaseActive = nil
         return PurchaseMessage(self, Text("The game refused the purchase.", "Игра отклонила покупку."))
     end
 
-    local attempts = 0
-    local function Check()
-        if self.purchaseActive ~= current then return end
-        attempts = attempts + 1
+    local function Check(timedOut, merchantUpdated)
         local afterCoins = Public(GetMoney(), "number")
         local afterTotal = Balance(current.currencyID, current.itemID)
-        local verified = afterTotal and afterTotal - total >= order.count
-            and afterCoins and coins - afterCoins == order.price
+        local received = afterTotal and afterTotal - total
+        local paid = afterCoins and coins - afterCoins
+        local verified = received and received >= order.count and paid == order.price
+        if not verified and saleState and received and paid and paid < order.price
+            and (received ~= 0 or paid ~= 0 or merchantUpdated or timedOut) and self.interaction == interaction then
+            local sold = self:CountItemsInMatchingSales(saleState, current, afterCoins, order.price)
+            verified = sold and received + sold >= order.count
+        end
         if verified then
             for _, check in ipairs(costs) do
                 local cost = check.cost
@@ -230,20 +293,38 @@ local function Purchase(self, offer, batches)
                 if not amount or check.before - amount ~= cost.amount then verified = false; break end
             end
         end
+        if not verified and not timedOut then return end
+
+        self.purchaseActive, self.purchaseCheck = nil, nil
         if verified then
+            if self.interaction == interaction then self:AccountForPurchaseSales(saleState, current, order.price) end
+            if current.stock and current.stock > 0 then self:InvalidateMerchantCatalogue() end
             self:RecordTransaction(current.buyback and "buyback" or "buy", current, order.count, order.price, name, order.costs, vendorID)
             self.merchantMessage = current.buyback and Text("Bought back.", "Предмет выкуплен.") or Text("Purchased.", "Покупка завершена.")
-        elseif attempts < 18 then
-            C_Timer.After(.10, Check)
-            return
-        else
+            if current.buyback and self.interaction == interaction then
+                self:ShowTransactionAmount("buyback", current, order.count, order.price)
+            end
+        elseif not pickup then
             self.merchantMessage = Text("No purchase confirmation received.", "Игра не подтвердила покупку.")
         end
-        self.purchaseActive = nil
-        self:RefreshMerchantWindow()
+        if not verified then self.purchaseQueue = nil end
+        self:RefreshMerchantBalanceAndStatus()
+        self:QueueMerchantRefresh()
+        self:QueueManualSaleObservation()
+        if verified and not current.buyback and self.interaction == interaction then
+            local card = self:MarkPurchasedOffer(current)
+            self:ShowTransactionAmount("buy", current, order.count, order.price, order.costs, card)
+        end
+        if verified then ScheduleNextPurchase(self) end
+        return true
     end
-    C_Timer.After(.10, Check)
-    self:RefreshMerchantWindow()
+    if pickup then
+        self.cursorPurchase = Check
+    else
+        WatchPurchase(self, Check)
+    end
+    if self.purchaseActive then self:RefreshMerchantBalanceAndStatus() end
+    return true
 end
 
 local function SelectedBatches(dialog)
@@ -264,36 +345,63 @@ local function RefreshPurchaseDetails(dialog)
     dialog.price:SetText(batches and E:OfferPrice(order)
         or Text("Enter a number from 1 to %d.", "Введи число от 1 до %d."):format(dialog.maxBatches))
     dialog.action:SetEnabled(batches ~= nil)
+    if dialog.maxBatches then
+        dialog.less:SetEnabled(batches ~= 1)
+        dialog.more:SetEnabled(batches ~= dialog.maxBatches)
+        dialog.maxButton:SetEnabled(batches ~= dialog.maxBatches)
+    end
+    if dialog.displayedBatches ~= batches then
+        dialog.displayedBatches = batches
+        if batches and dialog.maxBatches and dialog:IsVisible() and Sintezza_Theme.animateControls ~= false then
+            dialog.animateDetails(0, 0)
+            dialog.animateDetails(1, 0, .22)
+        else
+            dialog.animateDetails(1, 0)
+        end
+    end
 end
 
-function E:RequestPurchase(offer, chooseQuantity)
+function E:RequestPurchase(offer, action)
     if self.purchaseConfirm and self.purchaseDialog and self.purchaseDialog:IsVisible() then
         self.purchaseDialog:Raise()
         return
+    end
+    local pickup = action == "pickup" and not offer.buyback
+    if action ~= "quantity" and CanBuyImmediately(self, offer) then
+        if not pickup and self.interaction and (self.purchaseActive or self.purchaseQueue) and self:CanInteract() then
+            local queue = self.purchaseQueue
+            if not queue or queue.interaction ~= self.interaction then
+                queue = { interaction = self.interaction }
+                self.purchaseQueue = queue
+            end
+            queue[#queue + 1] = offer
+            if not self.purchaseActive then ScheduleNextPurchase(self) end
+            return PurchaseMessage(self, Text("Queued purchases: %d", "Покупок в очереди: %d"):format(#queue))
+        end
+        return Purchase(self, offer, nil, pickup)
     end
     local blocker = PurchaseBlocker(self)
     if blocker then return PurchaseMessage(self, blocker) end
     local allowed, reason = self:CanBuyOffer(offer)
     if not allowed then return PurchaseMessage(self, reason) end
-    local limit = self.profile.purchaseLimitGold
     local maxBatches
-    if chooseQuantity and not offer.buyback then
+    if action == "quantity" and not offer.buyback then
         maxBatches = AffordableBatches(offer)
+        if maxBatches == 0 then return end
         if not maxBatches or maxBatches < 1 then
             return PurchaseMessage(self, Text("No quantity available to buy.", "Нет доступного количества для покупки."))
         end
-    elseif not offer.buyback and offer.extended == false and limit > 0 and offer.price <= limit * COPPER_PER_GOLD then
-        return Purchase(self, offer)
     end
     self.purchaseDialog = self.purchaseDialog or self:CreatePurchasePopup()
     local dialog = self.purchaseDialog
     self.purchaseConfirm, self.merchantMessage = offer, nil
     dialog.header.title:SetText(offer.buyback and Text("Buyback", "Выкуп") or Text("Purchase", "Покупка"))
-    dialog.action.text:SetText(offer.buyback and Text("Buy back", "Выкупить") or Text("Buy", "Купить"))
+    dialog.action.text:SetText(offer.buyback and Text("Buy back", "Выкупить")
+        or pickup and Text("Pick up", "Взять на курсор") or Text("Buy", "Купить"))
     dialog.itemIcon:SetTexture(offer.texture or 134400)
     ns.Theme:PaintItemBorder(dialog.itemBorder, offer.quality)
-    dialog.item, dialog.maxBatches = offer, maxBatches
-    dialog:SetHeight(maxBatches and 190 or 156)
+    dialog.item, dialog.maxBatches, dialog.pickup = offer, maxBatches, pickup
+    dialog:SetHeight(maxBatches and 150 or 120)
     dialog.quantityRow:SetShown(maxBatches ~= nil)
     if maxBatches then
         dialog.quantityLabel:SetText(offer.count == 1 and Text("Quantity", "Количество")
@@ -303,11 +411,13 @@ function E:RequestPurchase(offer, chooseQuantity)
     RefreshPurchaseDetails(dialog)
     dialog:Show()
     dialog:Raise()
-    self:RefreshMerchantWindow()
+    self:RefreshMerchantBalanceAndStatus()
+    self:QueueMerchantRefresh()
 end
 
 function E:CancelPurchase()
     self.purchaseConfirm = nil
+    self.purchaseQueue = nil
     if self.purchaseDialog then self.purchaseDialog:Hide() end
 end
 
@@ -317,7 +427,7 @@ function E:AcceptPurchase(offer)
     local batches = dialog.maxBatches and SelectedBatches(dialog)
     if dialog.maxBatches and not batches then return end
     self.purchaseConfirm = nil
-    Purchase(self, offer, batches)
+    Purchase(self, offer, batches, dialog.pickup)
     return true
 end
 
@@ -326,7 +436,7 @@ function E:CreatePurchasePopup()
     local W = Sintezza_Theme:CreateWidgets(T)
     local dialog = CreateFrame("Frame", "Sintezza_VendorPurchaseWindow", self.merchantWindow or UIParent, "BackdropTemplate")
     dialog:Hide()
-    dialog:SetSize(414, 156)
+    dialog:SetSize(360, 120)
     dialog:SetPoint("CENTER", UIParent, "CENTER")
     if dialog.SetIgnoreParentAlpha then dialog:SetIgnoreParentAlpha(true) end
     if dialog.SetIgnoreParentScale then dialog:SetIgnoreParentScale(true) end
@@ -335,7 +445,7 @@ function E:CreatePurchasePopup()
     dialog:EnableMouse(true)
     dialog:SetMovable(true)
     T:WindowSurface(dialog)
-    local header = W:WindowHeader(dialog, { title = Text("Purchase", "Покупка"), icon = ns.Icon })
+    local header = W:WindowHeader(dialog, { title = Text("Purchase", "Покупка"), icon = ns.Icon, height = 36, titleSize = 15 })
     dialog.header = header
     header:EnableMouse(true)
     header:RegisterForDrag("LeftButton")
@@ -344,8 +454,8 @@ function E:CreatePurchasePopup()
     end)
     header:SetScript("OnDragStop", function() dialog:StopMovingOrSizing() end)
     local item = CreateFrame("Frame", nil, dialog)
-    item:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 14, -12)
-    item:SetSize(36, 36)
+    item:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 12, -8)
+    item:SetSize(34, 34)
     dialog.itemIcon = item:CreateTexture(nil, "ARTWORK")
     dialog.itemIcon:SetAllPoints()
     dialog.itemIcon:SetTexCoord(.07, .93, .07, .93)
@@ -359,50 +469,71 @@ function E:CreatePurchasePopup()
     end)
     item:SetScript("OnLeave", function() GameTooltip:Hide() end)
     dialog.itemName = W:Label(dialog, "", 12, T.text)
-    dialog.itemName:SetPoint("TOPLEFT", item, "TOPRIGHT", 10, -2)
-    dialog.itemName:SetPoint("RIGHT", dialog, "RIGHT", -14, 0)
+    dialog.itemName:SetPoint("TOPLEFT", item, "TOPRIGHT", 9, -2)
+    dialog.itemName:SetPoint("RIGHT", dialog, "RIGHT", -12, 0)
     dialog.itemName:SetWordWrap(false)
     dialog.price = W:Label(dialog, "", 11, T.muted)
-    dialog.price:SetPoint("BOTTOMLEFT", item, "BOTTOMRIGHT", 10, 2)
+    dialog.price:SetPoint("BOTTOMLEFT", item, "BOTTOMRIGHT", 9, 2)
+    dialog.price:SetPoint("RIGHT", dialog, "RIGHT", -12, 0)
+    dialog.price:SetJustifyH("LEFT")
+    dialog.price:SetWordWrap(false)
+    dialog.animateDetails = Sintezza_Theme:AnimateControl(dialog, function(position)
+        dialog.itemName:SetAlpha(.86 + .14 * position)
+        dialog.price:SetAlpha(.76 + .24 * position)
+    end)
 
     local quantityRow = CreateFrame("Frame", nil, dialog)
-    quantityRow:SetPoint("TOPLEFT", item, "BOTTOMLEFT", 0, -12)
+    quantityRow:SetPoint("TOPLEFT", item, "BOTTOMLEFT", 0, -7)
     quantityRow:SetPoint("RIGHT", dialog, "RIGHT", -12, 0)
-    quantityRow:SetHeight(26)
+    quantityRow:SetHeight(24)
     dialog.quantityRow = quantityRow
     dialog.quantityLabel = W:Label(quantityRow, "", 12, T.text)
     dialog.quantityLabel:SetPoint("LEFT")
     local amount = W:EditBox(quantityRow, "", function() end)
-    amount:SetSize(70, 26)
+    amount:SetSize(44, 24)
+    amount:SetTextInsets(5, 5, 0, 0)
     amount:SetNumeric(true)
     amount:SetJustifyH("RIGHT")
     amount:HookScript("OnTextChanged", function() RefreshPurchaseDetails(dialog) end)
     amount:HookScript("OnEditFocusGained", function(self) self:HighlightText() end)
     amount:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
     dialog.amount = amount
-    local maxButton = W:Button(quantityRow, Text("Max", "Макс."), function()
+    local function Step(delta)
+        local value = tonumber(amount:GetText())
+        local nextValue = value and math.floor(value) + delta or 1
+        amount:SetText(tostring(math.max(1, math.min(dialog.maxBatches, nextValue))))
+    end
+    dialog.maxButton = W:Button(quantityRow, Text("Max", "Макс."), function()
         amount:SetText(tostring(dialog.maxBatches))
     end)
-    maxButton:SetSize(70, 26)
-    maxButton:SetPoint("RIGHT")
-    amount:SetPoint("RIGHT", maxButton, "LEFT", -6, 0)
+    dialog.maxButton:SetSize(54, 24)
+    dialog.maxButton:SetPoint("RIGHT")
+    dialog.more = W:Button(quantityRow, "+", function() Step(1) end)
+    dialog.more:SetSize(24, 24)
+    dialog.more:SetPoint("RIGHT", dialog.maxButton, "LEFT", -6, 0)
+    amount:SetPoint("RIGHT", dialog.more, "LEFT", -3, 0)
+    dialog.less = W:Button(quantityRow, "−", function() Step(-1) end)
+    dialog.less:SetSize(24, 24)
+    dialog.less:SetPoint("RIGHT", amount, "LEFT", -3, 0)
 
     local cancel = W:Button(dialog, Text("Cancel", "Отмена"), function() dialog:Hide() end)
-    cancel:SetSize(112, 24)
-    cancel:SetPoint("BOTTOMRIGHT", -12, 10)
+    cancel:SetSize(92, 24)
+    cancel:SetPoint("BOTTOMRIGHT", -12, 8)
     local buy = W:Button(dialog, Text("Buy", "Купить"), function()
         if self:AcceptPurchase(self.purchaseConfirm) then dialog:Hide() end
     end, true)
-    buy:SetSize(112, 24)
+    buy:SetSize(108, 24)
     buy:SetPoint("RIGHT", cancel, "LEFT", -6, 0)
     dialog.action = buy
     dialog:HookScript("OnHide", function()
         dialog:StopMovingOrSizing()
         if dialog:IsShown() then dialog:Hide() end
         self.purchaseConfirm = nil
-        dialog.item, dialog.maxBatches = nil, nil
+        dialog.item, dialog.maxBatches, dialog.pickup, dialog.displayedBatches = nil, nil, nil, nil
+        dialog.animateDetails(1, 0)
         amount:ClearFocus()
-        self:RefreshMerchantWindow()
+        self:RefreshMerchantBalanceAndStatus()
+        self:QueueMerchantRefresh()
     end)
     UISpecialFrames[#UISpecialFrames + 1] = dialog:GetName()
     return dialog

@@ -4,6 +4,9 @@ local W = Sintezza_Theme:CreateWidgets(T)
 local labels = ns.MerchantLabels
 local BUYBACK_PANEL_WIDTH = 200
 local BUYBACK_DIVIDER_OFFSET = 136
+local PURCHASE_SUCCESS = { .48, .82, .58, 1 }
+local AMOUNT_DURATION = 1.25
+local MAX_VISIBLE_AMOUNTS = 4
 local tabs = { "catalog", "buyback", "review", "journal" }
 local tabNames = {
     catalog = Text("Merchant", "Торговец"), buyback = Text("Buyback", "Выкуп"),
@@ -168,6 +171,170 @@ local function FormatLogCost(entry)
     return (entry.kind == "sell" and "+" or "−") .. value
 end
 
+local function SameMerchantItem(item, offer)
+    return item and item.index == offer.index and item.itemID == offer.itemID
+        and item.currencyID == offer.currencyID and item.link == offer.link and item.name == offer.name
+end
+
+function E:FindSaleAmountAnchor(item)
+    if not self:IsLootReviewOpen() then return end
+    for _, row in ipairs(self.lootReviewPanel.rows) do
+        local shown = row.item
+        if row:IsVisible() and shown and shown.bag == item.bag and shown.slot == item.slot
+            and shown.itemID == item.itemID and shown.guid == item.guid then
+            return row
+        end
+    end
+end
+
+local function AmountAnchor(window, kind, item)
+    local lastSale = window.quickBuyback.button
+    if window.tab == "catalog" and item and (kind == "buyback" or kind == "sell") and lastSale:IsVisible() then
+        local offer = lastSale.offer
+        if offer and offer.link == item.link and offer.itemID == item.itemID and offer.count == item.count
+            and offer.price == (item.price or item.value) then return lastSale end
+    elseif window.tab == "buyback" and kind == "buyback" then
+        for _, card in ipairs(window.cards) do
+            if card.kind == "buyback" and card:IsVisible() and SameMerchantItem(card.item, item) then return card end
+        end
+    end
+    return window.balance
+end
+
+local function PositionAmount(frame, offset)
+    frame:ClearAllPoints()
+    frame:SetPoint("BOTTOM", frame.origin, frame.originPoint, frame.x, frame.y + offset)
+end
+
+local function AdvanceAmount(frame, elapsed)
+    frame.elapsed = frame.elapsed + elapsed
+    local progress = frame.elapsed / AMOUNT_DURATION
+    if progress >= 1 then frame:Hide(); return end
+    if frame.motion and Sintezza_Theme.animateControls ~= false then
+        local rise = 1 - (1 - progress) ^ 2
+        PositionAmount(frame, 5 + 18 * rise)
+        frame:SetAlpha(math.min(1, .80 + 3 * progress, (1 - progress) / .36))
+    elseif frame.motion then
+        frame.motion = false
+        PositionAmount(frame, 5)
+        frame:SetAlpha(1)
+    end
+end
+
+local function HideTransactionAmounts(window)
+    for _, frame in ipairs(window.transactionAmounts or {}) do frame:Hide() end
+end
+
+local function GetAmountFrame(window, anchor)
+    window.transactionAmounts = window.transactionAmounts or {}
+    local available, oldest
+    for _, frame in ipairs(window.transactionAmounts) do
+        if not frame:IsShown() then available = frame
+        elseif frame.anchor == anchor then return frame
+        elseif not oldest or frame.elapsed > oldest.elapsed then oldest = frame end
+    end
+    if available then return available end
+    if #window.transactionAmounts >= MAX_VISIBLE_AMOUNTS then return oldest end
+
+    local frame = CreateFrame("Frame", nil, window)
+    frame:Hide()
+    frame:SetClampedToScreen(true)
+    frame.label = W:Label(frame, "", 14, T.text)
+    frame.label:SetPoint("CENTER")
+    T:Font(frame.label, 14, "OUTLINE", T.text)
+    frame:SetScript("OnHide", function(self) self:SetScript("OnUpdate", nil) end)
+    window.transactionAmounts[#window.transactionAmounts + 1] = frame
+    return frame
+end
+
+function E:ShowTransactionAmount(kind, item, count, money, costs, anchor)
+    local window = self.merchantWindow
+    if not window or not window:IsVisible() or InCombatLockdown() or not self:HasActiveMerchant() then return end
+    if money == 0 and not costs and kind ~= "buyback" then return end
+
+    anchor = anchor or AmountAnchor(window, kind, item)
+    local frame = GetAmountFrame(window, anchor)
+    local value = kind == "sell" and Coins(money) or self:OfferPrice({ price = money, costs = costs })
+    local text = (kind == "sell" and "+" or "−") .. value
+    if item and (kind == "buyback" or anchor == window.balance and item.texture) then
+        local icon = ("|T%s:14|t"):format(item.texture or 134400)
+        text = icon .. " " .. (kind == "buyback" and ("+%d  ·  "):format(count) or "") .. text
+    end
+    frame.label:SetText(text)
+    Sintezza_Theme:Tint(frame.label, "SetTextColor", kind == "sell" and PURCHASE_SUCCESS or T.warning)
+    frame:SetSize(math.ceil(frame.label:GetStringWidth()) + 8, 23)
+    frame:SetFrameLevel(window:GetFrameLevel() + 24)
+    local x, top = anchor:GetCenter(), anchor:GetTop()
+    local left, bottom = window:GetLeft(), window:GetBottom()
+    if x and top and left and bottom then
+        frame.origin, frame.originPoint, frame.x, frame.y = window, "BOTTOMLEFT", x - left, top - bottom
+    else
+        frame.origin, frame.originPoint, frame.x, frame.y = anchor, "TOP", 0, 0
+    end
+    frame.anchor, frame.elapsed = anchor, 0
+    frame.motion = Sintezza_Theme.animateControls ~= false
+    PositionAmount(frame, 5)
+    frame:SetAlpha(frame.motion and .80 or 1)
+    frame:SetScript("OnUpdate", AdvanceAmount)
+    frame:Show()
+end
+
+local function ClearPurchaseFeedback(card)
+    local feedback = card.purchaseFeedback
+    if not feedback or not feedback.token then return end
+    feedback.token = nil
+    feedback.mark:Hide()
+    feedback.flash(0, 0)
+    card.title:SetPoint("RIGHT", -6, 0)
+    card.detail:SetPoint("RIGHT", -6, 0)
+end
+
+function E:MarkPurchasedOffer(offer)
+    local window = self.merchantWindow
+    if not window or not window:IsVisible() or window.tab ~= "catalog"
+        or InCombatLockdown() or not self:HasActiveMerchant() then return end
+
+    for _, card in ipairs(window.cards) do
+        if card.kind == "catalog" and card:IsVisible() and SameMerchantItem(card.item, offer) then
+            local feedback = card.purchaseFeedback
+            if not feedback then
+                local wash = card:CreateTexture(nil, "BACKGROUND", nil, 1)
+                wash:SetPoint("TOPLEFT", 1, -1)
+                wash:SetPoint("BOTTOMRIGHT", -1, 1)
+                Sintezza_Theme:Tint(wash, "SetColorTexture", PURCHASE_SUCCESS, .22)
+                wash:SetAlpha(0)
+                local mark = CreateFrame("Frame", nil, card)
+                mark:SetSize(20, 20)
+                mark:SetPoint("RIGHT", -6, 0)
+                T:Glyph(mark, "check", 20, PURCHASE_SUCCESS):SetPoint("CENTER", -.35, 0)
+                T:Glyph(mark, "check", 20, PURCHASE_SUCCESS):SetPoint("CENTER", .35, 0)
+                feedback = {
+                    mark = mark,
+                    flash = Sintezza_Theme:AnimateControl(card, function(amount) wash:SetAlpha(amount) end),
+                }
+                card.purchaseFeedback = feedback
+            end
+            local token = {}
+            feedback.token = token
+            card.title:SetPoint("RIGHT", -30, 0)
+            card.detail:SetPoint("RIGHT", -30, 0)
+            feedback.mark:Show()
+            if Sintezza_Theme.animateControls ~= false then
+                feedback.flash(1, 0)
+                C_Timer.After(.35, function()
+                    if feedback.token == token then feedback.flash(0, 0, .65) end
+                end)
+            else
+                feedback.flash(0, 0)
+            end
+            C_Timer.After(1.6, function()
+                if feedback.token == token then ClearPurchaseFeedback(card) end
+            end)
+            return card
+        end
+    end
+end
+
 local function CreateCard(parent)
     local card = CreateFrame("Button", nil, parent, "BackdropTemplate")
     T:Backdrop(card, T.panel, T.lineSoft)
@@ -195,7 +362,8 @@ local function CreateCard(parent)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         if self.kind == "catalog" then
             GameTooltip:SetMerchantItem(item.index)
-            GameTooltip:AddLine(Text("Right-click to choose quantity", "ПКМ — выбрать количество"), .82, .82, .82)
+            GameTooltip:AddLine(Text("Right-click to buy. Use the Split Stack shortcut to choose quantity.",
+                "ПКМ — купить. Команда «Разделить стопку» — выбрать количество."), .82, .82, .82, true)
         elseif self.kind == "buyback" then
             GameTooltip:SetBuybackItem(item.index)
         elseif item.link then
@@ -209,21 +377,28 @@ local function CreateCard(parent)
         self:SetBackdropBorderColor(unpack(T.lineSoft))
         if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
     end)
+    card:SetScript("OnHide", ClearPurchaseFeedback)
     card:SetScript("OnClick", function(self, button)
         local item = self.item
         if not item or InCombatLockdown() then return end
-        if button == "RightButton" then
-            if self.kind == "catalog" then E:RequestPurchase(item, true) end
-        elseif item.link and IsModifiedClick("CHATLINK") then
-            HandleModifiedItemClick(item.link)
-        elseif self.kind ~= "journal" then
+        if IsModifiedClick() then
+            if item.link and HandleModifiedItemClick(item.link) then return end
+            if self.kind == "catalog" and IsModifiedClick("SPLITSTACK") then
+                E:RequestPurchase(item, "quantity")
+            end
+        elseif self.kind == "buyback" or (self.kind == "catalog" and button == "RightButton") then
             E:RequestPurchase(item)
+        elseif self.kind == "catalog" and button == "LeftButton" then
+            E:RequestPurchase(item, "pickup")
         end
     end)
     return card
 end
 
 local function DrawCard(card, item, kind)
+    if card.purchaseFeedback and (kind ~= "catalog" or not SameMerchantItem(card.item, item)) then
+        ClearPurchaseFeedback(card)
+    end
     card.item, card.kind = item, kind
     card.icon:SetTexture(item.texture or 134400)
     T:PaintItemBorder(card.border, item.quality)
@@ -243,17 +418,41 @@ local function DrawCard(card, item, kind)
     card.detail:SetText(text)
     local canBuy = kind == "catalog" or kind == "buyback"
     local colorCost = canBuy and E.profile.colorCostsByAffordability
-    local tint = colorCost and (E:CanBuyOffer(item) and {.48,.82,.58,1} or {.88,.43,.39,1}) or T.muted
+    local tint = colorCost and (E:CanBuyOffer(item) and PURCHASE_SUCCESS or {.88,.43,.39,1}) or T.muted
     Sintezza_Theme:Tint(card.detail, "SetTextColor", tint)
     card:Show()
 end
 
+function E:InvalidateMerchantCatalogue(itemID)
+    local cached = self.merchantCatalogue
+    if cached and (not itemID or cached.incomplete or cached.itemIDs[itemID]) then
+        self.merchantCatalogue = nil
+    end
+end
+
 local function Catalogue(kind)
-    local items, buyback = {}, kind == "buyback"
-    local count = Public(buyback and GetNumBuybackItems() or GetMerchantNumItems(), "number") or 0
+    local buyback = kind == "buyback"
+    if not buyback and E.merchantCatalogue then return E.merchantCatalogue.items end
+    local count = Public(buyback and GetNumBuybackItems() or GetMerchantNumItems(), "number")
+    if not count then return {} end
+    local items, itemIDs, incomplete = {}, {}, false
     for i = 1, count do
         local offer = E:GetOffer(i, buyback)
-        if offer then items[#items + 1] = offer end
+        if offer then
+            items[#items + 1] = offer
+            if not buyback then
+                if offer.itemID then itemIDs[offer.itemID] = true end
+                for _, cost in ipairs(offer.costs or {}) do
+                    if cost.itemID then itemIDs[cost.itemID] = true end
+                end
+                incomplete = incomplete or (not offer.link and not offer.currencyID) or (offer.extended and not offer.costs)
+            end
+        else
+            incomplete = true
+        end
+    end
+    if not buyback then
+        E.merchantCatalogue = { items = items, itemIDs = itemIDs, incomplete = incomplete }
     end
     return items
 end
@@ -317,10 +516,22 @@ local function JunkItems()
     return E:GetJunkSaleItems()
 end
 
-local function RefreshFooter(window, active, journal)
+local function RefreshBalance(window)
     local money = Public(GetMoney(), "number")
     window.balanceText:SetText(money and Coins(money) or "—")
     window.balance:SetWidth(math.max(102, window.balanceText:GetStringWidth() + 18))
+    return money
+end
+
+function E:RefreshMerchantBalanceAndStatus()
+    local window = self.merchantWindow
+    if not window or not window:IsShown() then return end
+    RefreshBalance(window)
+    window.status:SetText(self.merchantMessage or "")
+end
+
+local function RefreshFooter(window, active, journal)
+    local money = RefreshBalance(window)
     window.stock:SetShown(active)
 
     local trading = active and not journal
@@ -575,6 +786,7 @@ local function CreateWindow()
     frame.quickBuyback = CreateQuickBuyback(frame)
     frame:SetScript("OnSizeChanged", function() E:RefreshMerchantWindow() end)
     frame:SetScript("OnHide", function()
+        HideTransactionAmounts(frame)
         frame.vendorDragging = nil
         frame:StopMovingOrSizing()
         frame.search:ClearFocus()
@@ -602,6 +814,7 @@ function E:OpenMerchantWindow(tab)
     self.merchantWindow = self.merchantWindow or CreateWindow()
     local window = self.merchantWindow
     if window.tab ~= tab then
+        HideTransactionAmounts(window)
         if self.quickSale then self:CancelSaleActions() end
         self:CancelPurchase()
         self:CloseLootReview()

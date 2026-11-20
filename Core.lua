@@ -160,7 +160,6 @@ local function Initialize()
     local function OpenSettings() E:OpenSettings() end
     ns.Launcher:RegisterSettings(title, OpenSettings)
     ns.Launcher:RegisterMinimap(title, icon, db.minimap, OpenSettings)
-    E:InstallManualSaleObserver()
     E:PrefetchJournalItems()
 end
 
@@ -182,15 +181,21 @@ SlashCmdList.SINTEZZA_VENDOR = function(message)
     end
 end
 
+local purchaseUpdateEvents = {
+    PLAYER_MONEY = true, BAG_UPDATE = true, BAG_UPDATE_DELAYED = true,
+    CURRENCY_DISPLAY_UPDATE = true, MERCHANT_UPDATE = true,
+}
 local events = CreateFrame("Frame")
-for _, event in ipairs({ "PLAYER_LOGIN", "MERCHANT_SHOW", "MERCHANT_CLOSED", "MERCHANT_UPDATE",
-    "BAG_UPDATE_DELAYED", "GET_ITEM_INFO_RECEIVED", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED",
-    "PLAYER_MONEY", "CURRENCY_DISPLAY_UPDATE", "CURSOR_CHANGED", "UPDATE_INVENTORY_DURABILITY",
+for event in pairs(purchaseUpdateEvents) do events:RegisterEvent(event) end
+for _, event in ipairs({ "PLAYER_LOGIN", "MERCHANT_SHOW", "MERCHANT_CLOSED",
+    "GET_ITEM_INFO_RECEIVED", "MERCHANT_FILTER_ITEM_UPDATE", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED",
+    "CURSOR_CHANGED", "UPDATE_INVENTORY_DURABILITY",
     "GUILDBANK_UPDATE_MONEY", "GUILDBANK_UPDATE_WITHDRAWMONEY" }) do
     events:RegisterEvent(event)
 end
 local refreshQueued, rescanReview
-local function QueueRefresh(scan)
+function E:QueueMerchantRefresh(scan)
+    if not self:IsLootReviewOpen() and not (self.merchantWindow and self.merchantWindow:IsShown()) then return end
     rescanReview = rescanReview or scan
     if refreshQueued then return end
     refreshQueued = true
@@ -198,20 +203,31 @@ local function QueueRefresh(scan)
         refreshQueued = nil
         local rescan = rescanReview
         rescanReview = nil
-        E:RefreshMerchantWindow()
-        if not E.saleActive then E:RefreshLootReview(rescan) end
+        self:RefreshMerchantWindow()
+        if not self.saleActive then self:RefreshLootReview(rescan) end
     end)
 end
 
 local toolScanQueued, exclusionsRefreshQueued
-local manualSnapshotQueued
-local function QueueManualSnapshot()
-    if manualSnapshotQueued then return end
-    manualSnapshotQueued = true
-    C_Timer.After(.1, function()
-        manualSnapshotQueued = nil
-        if E.interaction then E:SnapshotManualSales() end
-    end)
+local manualSaleQueued
+function E:QueueManualSaleObservation(merchantUpdated)
+    local interaction = self.interaction
+    if not interaction or self.saleActive then return end
+    if manualSaleQueued and manualSaleQueued.interaction == interaction then
+        manualSaleQueued.merchantUpdated = manualSaleQueued.merchantUpdated or merchantUpdated
+        return
+    end
+    local pending = { interaction = interaction, merchantUpdated = merchantUpdated }
+    manualSaleQueued = pending
+    local function Observe(final)
+        if manualSaleQueued ~= pending then return end
+        if self.interaction == interaction and self:ObserveManualSales(final, pending.merchantUpdated) == false and not final then
+            C_Timer.After(.25, function() Observe(true) end)
+        else
+            manualSaleQueued = nil
+        end
+    end
+    C_Timer.After(.10, Observe)
 end
 
 local function QueueToolScan()
@@ -233,20 +249,31 @@ local function QueueExclusionsRefresh()
 end
 
 events:SetScript("OnEvent", function(_, event, itemID, loaded)
+    if event == "MERCHANT_UPDATE" or event == "MERCHANT_FILTER_ITEM_UPDATE" then E:InvalidateMerchantCatalogue() end
+    if purchaseUpdateEvents[event] and E.purchaseCheck then E.purchaseCheck(false, event == "MERCHANT_UPDATE") end
+    if event == "BAG_UPDATE" then return end
+    if event == "PLAYER_MONEY" or event == "MERCHANT_UPDATE" or event == "BAG_UPDATE_DELAYED" then
+        E:QueueManualSaleObservation(event == "MERCHANT_UPDATE")
+    end
+    if E.cursorPurchase and (event == "CURSOR_CHANGED" or event == "MERCHANT_CLOSED"
+        or event == "MERCHANT_SHOW" or event == "PLAYER_REGEN_DISABLED") then
+        E:CheckCursorPurchase(event ~= "CURSOR_CHANGED")
+    end
     if event == "PLAYER_LOGIN" then
         Initialize()
         AttachMerchantButton()
         QueueToolScan()
     elseif event == "MERCHANT_SHOW" then
         local interaction = {}
+        E.purchaseQueue = nil
         E.interaction = interaction
+        E:InvalidateMerchantCatalogue()
         E.merchantMessage = nil
         E:SnapshotManualSales()
         C_Timer.After(0, function()
             if E.interaction ~= interaction or not E.profile or InCombatLockdown() or not E:HasActiveMerchant() then return end
             AttachMerchantButton()
             E:ScanProfessionTools()
-            E:SnapshotManualSales()
             if E.profile.showPanelOnVendor then E:OpenMerchantWindow() end
             if E.profile.autoRepair then E:RepairAll(false) end
             if E.profile.autoSellJunk == true and E:CanUseSale() then
@@ -256,6 +283,7 @@ events:SetScript("OnEvent", function(_, event, itemID, loaded)
     elseif event == "MERCHANT_CLOSED" or event == "PLAYER_REGEN_DISABLED" then
         E.interaction = nil
         E.manualSaleSnapshot = nil
+        E:InvalidateMerchantCatalogue()
         E:ShowStandardMerchant()
     elseif event == "PLAYER_REGEN_ENABLED" then
         E:ScanProfessionTools()
@@ -265,18 +293,15 @@ events:SetScript("OnEvent", function(_, event, itemID, loaded)
         itemID = ns.Public(itemID, "number")
         E:JournalItemInfoReceived(itemID, loaded)
         if loaded then
-            if E.interaction then QueueManualSnapshot() end
+            if itemID then E:InvalidateMerchantCatalogue(itemID) end
             if itemID and E.professionToolPending and E.professionToolPending[itemID] then QueueToolScan() end
             if itemID and E:IsExcluded(itemID) then QueueExclusionsRefresh() end
         end
-        if E:IsLootReviewOpen() or E.merchantWindow and E.merchantWindow:IsShown() then QueueRefresh(loaded) end
+        E:QueueMerchantRefresh(loaded)
     elseif event == "BAG_UPDATE_DELAYED" then
         QueueToolScan()
-        if E.interaction then E:SnapshotManualSales() end
-        if E:IsLootReviewOpen() or E.merchantWindow and E.merchantWindow:IsShown() then QueueRefresh(true) end
-    elseif E:IsLootReviewOpen() or E.merchantWindow and E.merchantWindow:IsShown() then
-        if event ~= "GET_ITEM_INFO_RECEIVED" then
-            QueueRefresh(event == "BAG_UPDATE_DELAYED")
-        end
+        E:QueueMerchantRefresh(true)
+    else
+        E:QueueMerchantRefresh()
     end
 end)
